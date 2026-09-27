@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme {
+	--font-sans: "Instrument Sans", "Helvetica Neue", system-ui, sans-serif;
+	--font-mono: "IBM Plex Mono", Consolas, monospace;
+	--color-bg: #f7fbfc;
+	--color-surface: #ffffff;
+	--color-surface-alt: #f1f7f8;
+	--color-text: #143033;
+	--color-muted: #5a7174;
+	--color-accent: #0a6e7a;
+	--color-accent-hover: #085862;
+	--color-accent-muted: #e6f6f8;
+	--color-brand: #0cb5cc;
+	--color-success: #0b6b4f;
+	--color-success-bg: #e3f5ee;
+	--color-warning: #8a5a00;
+	--color-warning-bg: #fbf3d9;
+	--color-error: #9b1c1c;
+	--color-error-bg: #fdecec;
+	--color-border: #d5e3e6;
+	--color-border-strong: #b7cdd1;
+	--radius-sm: 2px;
+	--radius-md: 4px;
+	--radius-lg: 6px;
+}
+
+html {
+	background: var(--color-bg);
+	color: var(--color-text);
+	font-family: var(--font-sans);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		/* biome-ignore lint/complexity/noImportantStyles: wajib menimpa durasi animasi bawaan */
+		animation-duration: 0.01ms !important;
+		/* biome-ignore lint/complexity/noImportantStyles: wajib menimpa durasi transisi bawaan */
+		transition-duration: 0.01ms !important;
+	}
+}

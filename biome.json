@@ -1,0 +1,16 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+	"vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+	"files": {
+		"includes": ["**", "!**/node_modules", "!**/.svelte-kit", "!**/dist", "!**/*.json"]
+	},
+	"formatter": { "indentStyle": "tab", "lineWidth": 100 },
+	"linter": {
+		"enabled": true,
+		"rules": { "preset": "recommended" }
+	},
+	"assist": { "enabled": true, "actions": { "source": { "organizeImports": "off" } } },
+	"css": { "parser": { "tailwindDirectives": true } },
+	"javascript": { "formatter": { "quoteStyle": "double", "semicolons": "always" } },
+	"html": { "experimentalFullSupportEnabled": true }
+}

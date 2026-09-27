@@ -1,0 +1,20 @@
+{
+  "name": "@logbook/db",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts"
+  },
+  "scripts": {
+    "migrate": "bun src/migrate.ts",
+    "seed": "bun src/seed.ts"
+  },
+  "dependencies": {
+    "@logbook/schemas": "workspace:*",
+    "drizzle-orm": "^0.44.5"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.4",
+    "typescript": "^5.9.2"
+  }
+}
