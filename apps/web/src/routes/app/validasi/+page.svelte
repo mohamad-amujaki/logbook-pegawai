@@ -2,7 +2,9 @@
 	import { onMount } from "svelte";
 	import { api, ApiError } from "$lib/api";
 	import { jamRentang, labelJenis, labelKategori, labelStatus, menitKeJam } from "$lib/format";
+	import PageHeader from "$lib/PageHeader.svelte";
 	import PanelFokus from "$lib/PanelFokus.svelte";
+	import SelectionBar from "$lib/SelectionBar.svelte";
 	import SelectCari, { type OpsiCari } from "$lib/SelectCari.svelte";
 
 	type Tab = "antrian" | "riwayat";
@@ -59,14 +61,6 @@
 	let pesan = $state("");
 
 	const semua = $derived(data?.baris ?? []);
-	const stat = $derived.by(() => {
-		const menunggu = semua.filter((b) => b.status === "SUBMIT");
-		return {
-			menunggu: menunggu.length,
-			perluDiskusi: menunggu.filter((b) => b.kategori === "PERLU_DISKUSI").length,
-			ditinjau: semua.filter((b) => b.status === "TERVERIFIKASI" || b.status === "DITOLAK").length,
-		};
-	});
 
 	const opsiPegawai = $derived<OpsiCari[]>(
 		[...new Map(semua.map((b) => [b.pegawaiId, b])).values()].map((b) => ({
@@ -105,6 +99,21 @@
 			if (batas && (b.tanggal < batas.dari || b.tanggal > batas.sampai)) return false;
 			return true;
 		});
+	});
+	const semuaTersaring = $derived.by(() => {
+		const batas = rentangPeriode(periode, dari, sampai);
+		return semua.filter((b) => {
+			if (pegawaiId && b.pegawaiId !== pegawaiId) return false;
+			return !(batas && (b.tanggal < batas.dari || b.tanggal > batas.sampai));
+		});
+	});
+	const stat = $derived.by(() => {
+		const menunggu = semuaTersaring.filter((b) => b.status === "SUBMIT");
+		return {
+			menunggu: menunggu.length,
+			perluDiskusi: menunggu.filter((b) => b.kategori === "PERLU_DISKUSI").length,
+			ditinjau: semuaTersaring.filter((b) => b.status === "TERVERIFIKASI" || b.status === "DITOLAK").length,
+		};
 	});
 
 	const totalHalaman = $derived(Math.max(1, Math.ceil(baris.length / perHalaman)));
@@ -310,16 +319,19 @@
 		if (!data?.adaBawahan) {
 			return "Belum ada pegawai yang memilih Anda sebagai pemberi pertimbangan di SKP tahun ini.";
 		}
-		if (tab === "antrian" && tabBaris.length === 0) return "Tidak ada catatan menunggu.";
-		if (tab === "riwayat" && tabBaris.length === 0) return "Belum ada catatan yang ditinjau.";
+		if (tab === "antrian" && tabBaris.length === 0)
+			return "Antrian selesai. Tidak ada catatan yang menunggu keputusan Anda.";
+		if (tab === "riwayat" && tabBaris.length === 0) return "Belum ada keputusan validasi pada periode ini.";
 		return "Tidak ada catatan yang cocok dengan filter.";
 	}
 
 	onMount(muat);
 </script>
 
-<h1 class="text-xl font-semibold">Validasi</h1>
-<p class="mt-1 text-sm text-muted">Antrian catatan yang menunggu pertimbangan Anda.</p>
+<PageHeader
+	judul="Validasi catatan"
+	deskripsi="Tinjau catatan pegawai, setujui yang sesuai, atau tolak dengan alasan perbaikan yang jelas."
+/>
 
 {#if data}
 	<section class="mt-6 grid grid-cols-3 border border-border-strong">
@@ -336,17 +348,18 @@
 			<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">Sudah ditinjau</p>
 		</div>
 	</section>
+	<p class="mt-2 text-xs text-muted">Ringkasan mengikuti filter pegawai dan periode yang aktif.</p>
 
 	<div class="mt-6 flex flex-wrap items-baseline gap-6 text-sm">
 		<button
 			class={tab === "antrian" ? "font-medium text-accent" : "text-muted"}
 			type="button"
-			onclick={() => gantiTab("antrian")}>Menunggu</button
+			onclick={() => gantiTab("antrian")}>Perlu ditinjau ({stat.menunggu})</button
 		>
 		<button
 			class={tab === "riwayat" ? "font-medium text-accent" : "text-muted"}
 			type="button"
-			onclick={() => gantiTab("riwayat")}>Riwayat</button
+			onclick={() => gantiTab("riwayat")}>Selesai ditinjau ({stat.ditinjau})</button
 		>
 	</div>
 
@@ -382,10 +395,11 @@
 		<p class="mt-4 text-sm text-error" role="alert">{pesan}</p>
 	{/if}
 
-	{#if tab === "antrian" && terpilih.length > 0}
-		<div class="mt-6 flex flex-wrap items-center justify-between gap-3 border border-border px-3 py-3 text-sm">
+	{#if tab === "antrian"}
+		<SelectionBar jumlah={terpilih.length}>
+			{#snippet anak()}
 			{#if konfirmMassal}
-				<p>Setujui {terpilih.length} catatan? Keputusan tercatat per catatan.</p>
+				<p class="text-sm">Setujui {terpilih.length} catatan? Keputusan tercatat per catatan.</p>
 				<div class="flex items-center gap-4">
 					<button class="text-muted" type="button" disabled={sibuk} onclick={() => (konfirmMassal = false)}
 						>Batal</button
@@ -398,7 +412,6 @@
 					>
 				</div>
 			{:else}
-				<p>{terpilih.length} catatan dipilih</p>
 				<div class="flex items-center gap-4">
 					<button class="text-muted" type="button" onclick={() => { terpilih = []; konfirmMassal = false; }}
 						>Batal pilih</button
@@ -406,7 +419,8 @@
 					<button class="text-accent" type="button" onclick={() => (konfirmMassal = true)}>Setujui yang dipilih</button>
 				</div>
 			{/if}
-		</div>
+			{/snippet}
+		</SelectionBar>
 	{/if}
 
 	<div class="tabel-geser mt-6">
@@ -428,11 +442,11 @@
 						</th>
 					{/if}
 					<th class="border-b border-border-strong px-3 py-2">Pegawai</th>
-					<th class="border-b border-border-strong px-3 py-2">Waktu</th>
-					<th class="border-b border-border-strong px-3 py-2">Katalog</th>
-					<th class="border-b border-border-strong px-3 py-2">Uraian</th>
-					<th class="border-b border-border-strong px-3 py-2">Jam</th>
-					<th class="border-b border-border-strong px-3 py-2">Bukti</th>
+					<th class="border-b border-border-strong px-3 py-2">Tanggal dan waktu</th>
+					<th class="border-b border-border-strong px-3 py-2">Jenis dan produk</th>
+					<th class="border-b border-border-strong px-3 py-2">Uraian dan output</th>
+					<th class="border-b border-border-strong px-3 py-2">Waktu efektif</th>
+					<th class="border-b border-border-strong px-3 py-2">Bukti kerja</th>
 					{#if tab === "riwayat"}
 						<th class="border-b border-border-strong px-3 py-2">Status</th>
 					{:else}

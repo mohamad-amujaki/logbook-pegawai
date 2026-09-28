@@ -1,5 +1,12 @@
 /** Satu sumber tabel. Ubah di sini, lalu sesuaikan migrate.ts. */
-import { integer, sqliteTable, text, unique, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import {
+	index,
+	integer,
+	sqliteTable,
+	text,
+	unique,
+	type AnySQLiteColumn,
+} from "drizzle-orm/sqlite-core";
 
 const timestamps = {
 	createdAt: text("created_at")
@@ -32,34 +39,85 @@ export const timKerja = sqliteTable("tim_kerja", {
 	...timestamps,
 });
 
-export const pegawai = sqliteTable("pegawai", {
-	id: text("id").primaryKey(),
-	nip: text("nip").notNull().unique(),
-	namaLengkap: text("nama_lengkap").notNull(),
-	pangkatGolongan: text("pangkat_golongan").notNull(),
-	tmt: text("tmt"),
-	jabatan: text("jabatan").notNull(),
-	unitKerjaId: text("unit_kerja_id")
-		.notNull()
-		.references(() => unitKerja.id),
-	timKerjaId: text("tim_kerja_id").references(() => timKerja.id),
-	passwordHash: text("password_hash").notNull(),
-	wajibGantiSandi: integer("wajib_ganti_sandi", { mode: "boolean" }).notNull().default(true),
-	isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
-	isKepalaBiro: integer("is_kepala_biro", { mode: "boolean" }).notNull().default(false),
-	...timestamps,
-});
+export const pegawai = sqliteTable(
+	"pegawai",
+	{
+		id: text("id").primaryKey(),
+		nip: text("nip").notNull().unique(),
+		namaLengkap: text("nama_lengkap").notNull(),
+		pangkatGolongan: text("pangkat_golongan").notNull(),
+		tmt: text("tmt"),
+		jabatan: text("jabatan").notNull(),
+		unitKerjaId: text("unit_kerja_id")
+			.notNull()
+			.references(() => unitKerja.id),
+		timKerjaId: text("tim_kerja_id").references(() => timKerja.id),
+		status: text("status").notNull().default("aktif"),
+		passwordHash: text("password_hash").notNull(),
+		wajibGantiSandi: integer("wajib_ganti_sandi", { mode: "boolean" }).notNull().default(true),
+		isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
+		isKepalaBiro: integer("is_kepala_biro", { mode: "boolean" }).notNull().default(false),
+		...timestamps,
+	},
+	(t) => [index("pegawai_unit_tim_idx").on(t.unitKerjaId, t.timKerjaId)],
+);
 
-export const sesi = sqliteTable("sesi", {
-	id: text("id").primaryKey(),
-	pegawaiId: text("pegawai_id")
-		.notNull()
-		.references(() => pegawai.id),
-	berakhirPada: text("berakhir_pada").notNull(),
-	createdAt: text("created_at")
-		.notNull()
-		.$defaultFn(() => new Date().toISOString()),
-});
+export const akun = sqliteTable(
+	"akun",
+	{
+		id: text("id").primaryKey(),
+		pegawaiId: text("pegawai_id")
+			.notNull()
+			.references(() => pegawai.id),
+		passwordHash: text("password_hash").notNull(),
+		wajibGantiSandi: integer("wajib_ganti_sandi", { mode: "boolean" }).notNull().default(true),
+		status: text("status").notNull().default("AKTIF"),
+		terakhirLoginPada: text("terakhir_login_pada"),
+		ditangguhkanPada: text("ditangguhkan_pada"),
+		ditangguhkanOlehId: text("ditangguhkan_oleh_id").references((): AnySQLiteColumn => akun.id),
+		alasanPenangguhan: text("alasan_penangguhan"),
+		...timestamps,
+	},
+	(t) => [unique("akun_pegawai").on(t.pegawaiId), index("akun_status_idx").on(t.status)],
+);
+
+export const akunPeran = sqliteTable(
+	"akun_peran",
+	{
+		id: text("id").primaryKey(),
+		akunId: text("akun_id")
+			.notNull()
+			.references(() => akun.id),
+		peran: text("peran").notNull(),
+		unitKerjaId: text("unit_kerja_id").references(() => unitKerja.id),
+		diberikanOlehId: text("diberikan_oleh_id").references(() => akun.id),
+		createdAt: text("created_at")
+			.notNull()
+			.$defaultFn(() => new Date().toISOString()),
+	},
+	(t) => [
+		unique("akun_peran_cakupan").on(t.akunId, t.peran, t.unitKerjaId),
+		index("akun_peran_akun_idx").on(t.akunId),
+		index("akun_peran_unit_idx").on(t.unitKerjaId),
+	],
+);
+
+export const sesi = sqliteTable(
+	"sesi",
+	{
+		id: text("id").primaryKey(),
+		pegawaiId: text("pegawai_id")
+			.notNull()
+			.references(() => pegawai.id),
+		akunId: text("akun_id").references(() => akun.id),
+		berakhirPada: text("berakhir_pada").notNull(),
+		dicabutPada: text("dicabut_pada"),
+		createdAt: text("created_at")
+			.notNull()
+			.$defaultFn(() => new Date().toISOString()),
+	},
+	(t) => [index("sesi_akun_idx").on(t.akunId, t.berakhirPada)],
+);
 
 export const produk = sqliteTable("produk", {
 	id: text("id").primaryKey(),
@@ -157,37 +215,47 @@ export const rencanaAksi = sqliteTable("rencana_aksi", {
 	akumulasi: integer("akumulasi", { mode: "boolean" }).notNull().default(false),
 });
 
-export const catatanHarian = sqliteTable("catatan_harian", {
-	id: text("id").primaryKey(),
-	pegawaiId: text("pegawai_id")
-		.notNull()
-		.references(() => pegawai.id),
-	tanggal: text("tanggal").notNull(),
-	jenisTugas: text("jenis_tugas").notNull(),
-	produkId: text("produk_id").references(() => produk.id),
-	tahapanId: text("tahapan_id").references(() => tahapan.id),
-	aktivitasId: text("aktivitas_id").references(() => aktivitas.id),
-	ikiId: text("iki_id").references(() => iki.id),
-	rencanaAksiId: text("rencana_aksi_id").references(() => rencanaAksi.id),
-	isiManual: integer("isi_manual", { mode: "boolean" }).notNull().default(false),
-	namaManualProduk: text("nama_manual_produk"),
-	namaManualTahapan: text("nama_manual_tahapan"),
-	usulanNormaWaktu: integer("usulan_norma_waktu"),
-	uraian: text("uraian").notNull(),
-	waktuMulai: text("waktu_mulai").notNull(),
-	waktuSelesai: text("waktu_selesai").notNull(),
-	menitEfektif: integer("menit_efektif").notNull(),
-	jumlahOutput: integer("jumlah_output").notNull(),
-	satuanOutput: text("satuan_output").notNull(),
-	kategori: text("kategori").notNull().default("BIASA"),
-	buktiUrl: text("bukti_url"),
-	buktiJudul: text("bukti_judul"),
-	status: text("status").notNull().default("DRAFT"),
-	catatanValidasi: text("catatan_validasi"),
-	divalidasiOlehId: text("divalidasi_oleh_id").references(() => pegawai.id),
-	divalidasiPada: text("divalidasi_pada"),
-	...timestamps,
-});
+export const catatanHarian = sqliteTable(
+	"catatan_harian",
+	{
+		id: text("id").primaryKey(),
+		pegawaiId: text("pegawai_id")
+			.notNull()
+			.references(() => pegawai.id),
+		tanggal: text("tanggal").notNull(),
+		jenisTugas: text("jenis_tugas").notNull(),
+		produkId: text("produk_id").references(() => produk.id),
+		tahapanId: text("tahapan_id").references(() => tahapan.id),
+		aktivitasId: text("aktivitas_id").references(() => aktivitas.id),
+		ikiId: text("iki_id").references(() => iki.id),
+		rencanaAksiId: text("rencana_aksi_id").references(() => rencanaAksi.id),
+		isiManual: integer("isi_manual", { mode: "boolean" }).notNull().default(false),
+		namaManualProduk: text("nama_manual_produk"),
+		namaManualTahapan: text("nama_manual_tahapan"),
+		usulanNormaWaktu: integer("usulan_norma_waktu"),
+		uraian: text("uraian").notNull(),
+		waktuMulai: text("waktu_mulai").notNull(),
+		waktuSelesai: text("waktu_selesai").notNull(),
+		menitEfektif: integer("menit_efektif").notNull(),
+		jumlahOutput: integer("jumlah_output").notNull(),
+		satuanOutput: text("satuan_output").notNull(),
+		kategori: text("kategori").notNull().default("BIASA"),
+		buktiUrl: text("bukti_url"),
+		buktiJudul: text("bukti_judul"),
+		status: text("status").notNull().default("DRAFT"),
+		catatanValidasi: text("catatan_validasi"),
+		divalidasiOlehId: text("divalidasi_oleh_id").references(() => pegawai.id),
+		divalidasiPada: text("divalidasi_pada"),
+		diajukanPada: text("diajukan_pada"),
+		unitKerjaIdSnapshot: text("unit_kerja_id_snapshot").references(() => unitKerja.id),
+		timKerjaIdSnapshot: text("tim_kerja_id_snapshot").references(() => timKerja.id),
+		...timestamps,
+	},
+	(t) => [
+		index("catatan_pegawai_tanggal_idx").on(t.pegawaiId, t.tanggal),
+		index("catatan_status_tanggal_idx").on(t.status, t.tanggal),
+	],
+);
 
 export const pinKatalog = sqliteTable(
 	"pin_katalog",
@@ -240,10 +308,30 @@ export const notifikasi = sqliteTable("notifikasi", {
 		.$defaultFn(() => new Date().toISOString()),
 });
 
+export const auditLog = sqliteTable(
+	"audit_log",
+	{
+		id: text("id").primaryKey(),
+		aktorAkunId: text("aktor_akun_id").references(() => akun.id),
+		targetAkunId: text("target_akun_id").references(() => akun.id),
+		aksi: text("aksi").notNull(),
+		alasan: text("alasan"),
+		sebelumJson: text("sebelum_json"),
+		sesudahJson: text("sesudah_json"),
+		requestId: text("request_id"),
+		createdAt: text("created_at")
+			.notNull()
+			.$defaultFn(() => new Date().toISOString()),
+	},
+	(t) => [index("audit_log_target_idx").on(t.targetAkunId, t.createdAt)],
+);
+
 export const schema = {
 	unitKerja,
 	timKerja,
 	pegawai,
+	akun,
+	akunPeran,
 	sesi,
 	produk,
 	tahapan,
@@ -257,4 +345,5 @@ export const schema = {
 	pinKatalog,
 	usulanKatalog,
 	notifikasi,
+	auditLog,
 };

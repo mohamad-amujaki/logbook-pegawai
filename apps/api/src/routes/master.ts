@@ -1,10 +1,11 @@
 import {
+	akun,
+	akunPeran,
 	aktivitas,
 	catatanHarian,
 	db,
 	hashPassword,
 	iki,
-	notifikasi,
 	pegawai,
 	produk,
 	rencanaAksi,
@@ -15,7 +16,6 @@ import {
 	tahapan,
 	timKerja,
 	unitKerja,
-	usulanKatalog,
 } from "@logbook/db";
 import {
 	aktivitasSchema,
@@ -32,12 +32,10 @@ import {
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, count, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
+import { adminOnly } from "../lib/authorization";
+import { catatAudit } from "../lib/audit";
 import { buatId } from "../lib/id";
 import { requireAuth } from "../middleware/auth";
-
-function adminOnly(user: { isAdmin: boolean; isKepalaBiro: boolean }) {
-	return user.isAdmin || user.isKepalaBiro;
-}
 
 async function pastikanUnitDanTim(unitKerjaId: string, timKerjaId: string | null | undefined) {
 	const unit = (
@@ -332,6 +330,15 @@ export const masterRoutes = new Hono()
 	})
 	.get("/tim", async (c) => {
 		const rows = await db.select().from(timKerja).orderBy(asc(timKerja.urutan));
+		const units = await db
+			.select({
+				id: unitKerja.id,
+				kode: unitKerja.kode,
+				nama: unitKerja.nama,
+				indukId: unitKerja.indukId,
+			})
+			.from(unitKerja);
+		const petaUnit = new Map(units.map((u) => [u.id, u]));
 		const orang = await db
 			.select({
 				id: pegawai.id,
@@ -350,11 +357,17 @@ export const masterRoutes = new Hono()
 		return c.json(
 			rows.map((t) => {
 				const ketua = orang.find((p) => p.id === t.ketuaPegawaiId) ?? null;
+				const unit = petaUnit.get(t.unitKerjaId);
+				const induk = unit?.indukId ? petaUnit.get(unit.indukId) : null;
 				return {
 					...t,
 					ketuaNama: ketua?.namaLengkap ?? null,
 					ketuaNip: ketua?.nip ?? null,
 					jumlahAnggota: jumlah.get(t.id) ?? 0,
+					unitNama: unit?.nama ?? null,
+					unitKode: unit?.kode ?? null,
+					indukNama: induk?.nama ?? null,
+					indukKode: induk?.kode ?? null,
 				};
 			}),
 		);
@@ -380,11 +393,13 @@ export const masterRoutes = new Hono()
 		const id = c.req.param("id");
 		const body = c.req.valid("json");
 		const ada = await db
-			.select({ id: timKerja.id })
+			.select({ id: timKerja.id, unitKerjaId: timKerja.unitKerjaId })
 			.from(timKerja)
 			.where(eq(timKerja.id, id))
 			.limit(1);
 		if (!ada[0]) return c.json({ error: "Tim kerja tidak ditemukan." }, 404);
+		const salahUnit = await pastikanUnitDanTim(body.unitKerjaId, null);
+		if (salahUnit) return c.json(salahUnit, 400);
 		if (body.ketuaPegawaiId) {
 			const ketua = await db
 				.select({ id: pegawai.id })
@@ -395,26 +410,37 @@ export const masterRoutes = new Hono()
 		}
 		const sekarang = new Date().toISOString();
 		try {
+			await db
+				.update(timKerja)
+				.set({
+					kode: body.kode,
+					nama: body.nama,
+					unitKerjaId: body.unitKerjaId,
+					status: body.status,
+					ketuaPegawaiId: body.ketuaPegawaiId,
+					updatedAt: sekarang,
+				})
+				.where(eq(timKerja.id, id));
 			if (body.ketuaPegawaiId) {
 				await db
 					.update(timKerja)
 					.set({ ketuaPegawaiId: null, updatedAt: sekarang })
 					.where(eq(timKerja.ketuaPegawaiId, body.ketuaPegawaiId));
 				await db
+					.update(timKerja)
+					.set({ ketuaPegawaiId: body.ketuaPegawaiId, updatedAt: sekarang })
+					.where(eq(timKerja.id, id));
+				await db
 					.update(pegawai)
-					.set({ timKerjaId: id, updatedAt: sekarang })
+					.set({ timKerjaId: id, unitKerjaId: body.unitKerjaId, updatedAt: sekarang })
 					.where(eq(pegawai.id, body.ketuaPegawaiId));
 			}
-			await db
-				.update(timKerja)
-				.set({
-					kode: body.kode,
-					nama: body.nama,
-					status: body.status,
-					ketuaPegawaiId: body.ketuaPegawaiId,
-					updatedAt: sekarang,
-				})
-				.where(eq(timKerja.id, id));
+			if (body.unitKerjaId !== ada[0].unitKerjaId) {
+				await db
+					.update(pegawai)
+					.set({ unitKerjaId: body.unitKerjaId, updatedAt: sekarang })
+					.where(eq(pegawai.timKerjaId, id));
+			}
 		} catch {
 			return c.json({ error: "Kode tim sudah dipakai. Ganti kode, lalu simpan lagi." }, 400);
 		}
@@ -478,6 +504,7 @@ export const masterRoutes = new Hono()
 				indukId: unitKerja.indukId,
 				timKerjaId: pegawai.timKerjaId,
 				timNama: timKerja.nama,
+				status: pegawai.status,
 				isAdmin: pegawai.isAdmin,
 				isKepalaBiro: pegawai.isKepalaBiro,
 			})
@@ -498,7 +525,8 @@ export const masterRoutes = new Hono()
 		);
 	})
 	.post("/pegawai", async (c) => {
-		if (!adminOnly(c.get("user"))) return c.json({ error: "Hanya admin." }, 403);
+		const user = c.get("user");
+		if (!adminOnly(user)) return c.json({ error: "Hanya admin." }, 403);
 		const parsed = pegawaiBaruSchema.safeParse(await c.req.json());
 		if (!parsed.success) {
 			const first = parsed.error.issues[0];
@@ -523,6 +551,7 @@ export const masterRoutes = new Hono()
 		}
 		const id = buatId("pg");
 		const now = new Date().toISOString();
+		const passwordHash = await hashPassword(body.nip);
 		await db.insert(pegawai).values({
 			id,
 			nip: body.nip,
@@ -532,12 +561,43 @@ export const masterRoutes = new Hono()
 			jabatan: body.jabatan,
 			unitKerjaId: body.unitKerjaId,
 			timKerjaId: body.timKerjaId || null,
-			passwordHash: await hashPassword(body.nip),
+			passwordHash,
 			wajibGantiSandi: true,
 			isAdmin: body.isAdmin,
 			isKepalaBiro: body.isKepalaBiro,
 			createdAt: now,
 			updatedAt: now,
+		});
+		await db.insert(akun).values({
+			id,
+			pegawaiId: id,
+			passwordHash,
+			wajibGantiSandi: true,
+			status: "AKTIF",
+			createdAt: now,
+			updatedAt: now,
+		});
+		if (body.isAdmin) {
+			await db.insert(akunPeran).values({
+				id: `${id}:ADMIN`,
+				akunId: id,
+				peran: "ADMIN",
+				diberikanOlehId: user.akunId,
+				createdAt: now,
+			});
+		}
+		if (body.isKepalaBiro) {
+			await db.insert(akunPeran).values({
+				id: `${id}:KEPALA_BIRO`,
+				akunId: id,
+				peran: "KEPALA_BIRO",
+				unitKerjaId: body.unitKerjaId,
+				diberikanOlehId: user.akunId,
+				createdAt: now,
+			});
+		}
+		await catatAudit(user, id, "BUAT_AKUN", {
+			sesudah: { pegawaiId: id, status: "AKTIF", isAdmin: body.isAdmin },
 		});
 		return c.json({ id });
 	})
@@ -614,8 +674,43 @@ export const masterRoutes = new Hono()
 		if (body.resetSandi) {
 			ubah.passwordHash = await hashPassword(body.nip);
 			ubah.wajibGantiSandi = true;
+			await db
+				.update(akun)
+				.set({
+					passwordHash: ubah.passwordHash,
+					wajibGantiSandi: true,
+					updatedAt: now,
+				})
+				.where(eq(akun.pegawaiId, id));
+			await db.update(sesi).set({ dicabutPada: now }).where(eq(sesi.pegawaiId, id));
 		}
 		await db.update(pegawai).set(ubah).where(eq(pegawai.id, id));
+		await db
+			.delete(akunPeran)
+			.where(and(eq(akunPeran.akunId, id), inArray(akunPeran.peran, ["ADMIN", "KEPALA_BIRO"])));
+		if (body.isAdmin) {
+			await db.insert(akunPeran).values({
+				id: `${id}:ADMIN`,
+				akunId: id,
+				peran: "ADMIN",
+				diberikanOlehId: user.akunId,
+				createdAt: now,
+			});
+		}
+		if (body.isKepalaBiro) {
+			await db.insert(akunPeran).values({
+				id: `${id}:KEPALA_BIRO`,
+				akunId: id,
+				peran: "KEPALA_BIRO",
+				unitKerjaId: body.unitKerjaId,
+				diberikanOlehId: user.akunId,
+				createdAt: now,
+			});
+		}
+		await catatAudit(user, id, "UBAH_PEGAWAI_DAN_PERAN", {
+			sebelum: lama,
+			sesudah: { ...body, resetSandi: Boolean(body.resetSandi) },
+		});
 		return c.json({ ok: true });
 	})
 	.delete("/pegawai/:id", async (c) => {
@@ -635,44 +730,24 @@ export const masterRoutes = new Hono()
 		if (!ada) return c.json({ error: "Pegawai tidak ditemukan." }, 404);
 
 		const now = new Date().toISOString();
+		await db.update(pegawai).set({ status: "nonaktif", updatedAt: now }).where(eq(pegawai.id, id));
 		await db
-			.update(timKerja)
-			.set({ ketuaPegawaiId: null, updatedAt: now })
-			.where(eq(timKerja.ketuaPegawaiId, id));
-		await db
-			.update(skp)
-			.set({ pemberiPertimbanganId: null, updatedAt: now })
-			.where(eq(skp.pemberiPertimbanganId, id));
-		await db
-			.update(skp)
-			.set({ pejabatPenilaiId: null, updatedAt: now })
-			.where(eq(skp.pejabatPenilaiId, id));
-		await db
-			.update(skp)
-			.set({ atasanPejabatPenilaiId: null, updatedAt: now })
-			.where(eq(skp.atasanPejabatPenilaiId, id));
-		await db
-			.update(catatanHarian)
-			.set({ divalidasiOlehId: null, updatedAt: now })
-			.where(eq(catatanHarian.divalidasiOlehId, id));
-
-		const milikSkp = await db.select({ id: skp.id }).from(skp).where(eq(skp.pegawaiId, id));
-		for (const h of milikSkp) await hapusPohonSkp(h.id);
-
-		const catatan = await db
-			.select({ id: catatanHarian.id })
-			.from(catatanHarian)
-			.where(eq(catatanHarian.pegawaiId, id));
-		const catatanIds = catatan.map((row) => row.id);
-		if (catatanIds.length > 0) {
-			await db.delete(usulanKatalog).where(inArray(usulanKatalog.catatanHarianId, catatanIds));
-		}
-		await db.delete(usulanKatalog).where(eq(usulanKatalog.pegawaiId, id));
-		await db.delete(catatanHarian).where(eq(catatanHarian.pegawaiId, id));
-		await db.delete(notifikasi).where(eq(notifikasi.pegawaiId, id));
-		await db.delete(sesi).where(eq(sesi.pegawaiId, id));
-		await db.delete(pegawai).where(eq(pegawai.id, id));
-		return c.json({ ok: true, nama: ada.namaLengkap });
+			.update(akun)
+			.set({
+				status: "DITANGGUHKAN",
+				ditangguhkanPada: now,
+				ditangguhkanOlehId: user.akunId,
+				alasanPenangguhan: "Pegawai dinonaktifkan.",
+				updatedAt: now,
+			})
+			.where(eq(akun.pegawaiId, id));
+		await db.update(sesi).set({ dicabutPada: now }).where(eq(sesi.pegawaiId, id));
+		await catatAudit(user, id, "NONAKTIFKAN_PEGAWAI", {
+			alasan: "Pegawai dinonaktifkan.",
+			sebelum: ada,
+			sesudah: { status: "nonaktif" },
+		});
+		return c.json({ ok: true, nama: ada.namaLengkap, status: "nonaktif" });
 	})
 	.get("/unit", async (c) => {
 		return c.json(await daftarUnit());
@@ -934,7 +1009,7 @@ async function kodeUnitUnik(dasar: string) {
 	return `${kode}${n}`;
 }
 
-async function hapusPohonSkp(skpId: string) {
+async function _hapusPohonSkp(skpId: string) {
 	const pimpinan = await db
 		.select({ id: rhkPimpinan.id })
 		.from(rhkPimpinan)

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, untrack } from "svelte";
 	import { goto } from "$app/navigation";
+	import { page } from "$app/state";
 	import { api, ApiError } from "$lib/api";
 	import PilihKatalog, { type OpsiKatalog } from "$lib/PilihKatalog.svelte";
 	import { validasiWaktu, type JenisIki } from "@logbook/schemas";
@@ -163,10 +164,22 @@
 			: "IKI ini belum punya rencana aksi. Isi di SKP, atau pilih IKI lain.",
 	);
 	const simpanNonaktif = $derived(!skpSiap || daftarIki.length === 0);
+	const durasiKalender = $derived.by(() => {
+		if (!waktuMulai || !waktuSelesai) return 0;
+		const menit = (new Date(waktuSelesai).getTime() - new Date(waktuMulai).getTime()) / 60000;
+		return menit > 0 ? Math.round(menit) : 0;
+	});
 
 	function nomorTw(iso: string): 1 | 2 | 3 | 4 {
 		const d = iso ? new Date(iso) : new Date();
 		return (Math.floor(d.getMonth() / 3) + 1) as 1 | 2 | 3 | 4;
+	}
+
+	function labelDurasi(menit: number): string {
+		if (menit < 60) return `${menit} menit`;
+		const jam = Math.floor(menit / 60);
+		const sisa = menit % 60;
+		return sisa ? `${jam} jam ${sisa} menit` : `${jam} jam`;
 	}
 
 	function targetTw(a: AksiOpsi, tw: 1 | 2 | 3 | 4): number {
@@ -327,6 +340,11 @@
 			kategori = row.kategori === "PERLU_DISKUSI" ? "PERLU_DISKUSI" : "BIASA";
 			buktiUrl = row.buktiUrl ?? "";
 			alasanTolak = row.status === "DITOLAK" ? (row.catatanValidasi ?? "") : "";
+		} else {
+			const mulai = page.url.searchParams.get("mulai");
+			const selesai = page.url.searchParams.get("selesai");
+			if (mulai && !Number.isNaN(new Date(mulai).getTime())) waktuMulai = keInputWaktu(mulai);
+			if (selesai && !Number.isNaN(new Date(selesai).getTime())) waktuSelesai = keInputWaktu(selesai);
 		}
 		katalog = await api<Katalog>("/master/katalog?hanyaAktif=1");
 		await muatPintasan();
@@ -472,102 +490,141 @@
 	}
 </script>
 
-<h1 class="text-xl font-semibold">{id ? "Ubah catatan" : "Catatan baru"}</h1>
+<div class="mx-auto max-w-5xl">
+	<a class="inline-flex min-h-11 items-center text-sm text-accent" href="/app/catatan">← Kembali ke catatan</a>
+	<h1 class="mt-1 text-xl font-semibold">{id ? "Ubah catatan" : "Catatan baru"}</h1>
+	<p class="mt-1 text-sm text-muted">
+		{id ? "Perbarui catatan sesuai arahan atasan." : "Catat pekerjaan dan output yang diselesaikan."}
+	</p>
+</div>
+
 {#if alasanTolak}
-	<div class="mx-auto mt-4 max-w-5xl border border-border px-3 py-3 text-sm">
-		<p class="text-xs font-medium uppercase tracking-wide text-muted">Alasan penolakan</p>
+	<div class="mx-auto mt-5 max-w-5xl border border-error bg-error-bg px-4 py-3 text-sm">
+		<p class="text-xs font-medium uppercase tracking-wide text-error">Alasan penolakan</p>
 		<p class="mt-1 whitespace-pre-wrap">{alasanTolak}</p>
 		<p class="mt-2 text-xs text-muted">Perbaiki isian, simpan, lalu kirim lagi dari daftar catatan.</p>
 	</div>
 {/if}
-<form class="mx-auto mt-6 max-w-5xl space-y-6" onsubmit={simpan}>
-	<fieldset class="space-y-3">
-		<legend class="text-sm font-medium">IKI dan rencana aksi</legend>
-		<p class="text-sm text-muted">Pilih IKI, lalu rencana aksi yang dikerjakan hari ini.</p>
+
+<form class="mx-auto mt-6 max-w-5xl space-y-8 pb-24 sm:pb-0" onsubmit={simpan}>
+	<section class="space-y-4 border-t border-border-strong pt-5">
+		<div>
+			<h2 class="text-sm font-semibold">Target kinerja</h2>
+			<p class="mt-1 text-sm text-muted">Pilih IKI, lalu rencana aksi yang dikerjakan hari ini.</p>
+		</div>
 		{#if skpSiap && daftarIki.length === 0}
-			<p class="text-sm text-muted">Belum ada IKI pada SKP tahun ini. Isi SKP lebih dulu.</p>
-			<a class="inline-block text-sm text-accent" href="/app/skp">Buka SKP</a>
+			<div class="border border-border px-4 py-3">
+				<p class="text-sm">Belum ada IKI pada SKP tahun ini.</p>
+				<a class="mt-1 inline-block text-sm text-accent" href="/app/skp">Buka SKP</a>
+			</div>
 		{:else}
-			<PilihKatalog
-				label="IKI"
-				satuan="IKI"
-				placeholder="Ketik indikator…"
-				opsi={opsiIki}
-				nilai={ikiId}
-				onubah={ubahIki}
-				bolehKosong={false}
-				disabled={!skpSiap}
-				pesanNonaktif="Memuat IKI…"
-			/>
-			<PilihKatalog
-				label="Rencana aksi"
-				satuan="rencana aksi"
-				placeholder="Ketik uraian rencana aksi…"
-				opsi={opsiAksi}
-				nilai={aksiId}
-				onubah={(id) => (aksiId = id)}
-				bolehKosong={false}
-				disabled={aksiNonaktif}
-				pesanNonaktif={pesanAksiNonaktif}
-			/>
+			<div class="grid gap-4 md:grid-cols-2">
+				<PilihKatalog
+					label="IKI"
+					satuan="IKI"
+					placeholder="Ketik indikator…"
+					opsi={opsiIki}
+					nilai={ikiId}
+					onubah={ubahIki}
+					bolehKosong={false}
+					disabled={!skpSiap}
+					pesanNonaktif="Memuat IKI…"
+				/>
+				<PilihKatalog
+					label="Rencana aksi"
+					satuan="rencana aksi"
+					placeholder="Ketik uraian rencana aksi…"
+					opsi={opsiAksi}
+					nilai={aksiId}
+					onubah={(id) => (aksiId = id)}
+					bolehKosong={false}
+					disabled={aksiNonaktif}
+					pesanNonaktif={pesanAksiNonaktif}
+				/>
+			</div>
 		{/if}
 		{#if ikiTerpilih && aksiTerpilih}
-			<dl class="grid gap-3 text-sm">
-				<div>
-					<dt class="text-xs text-muted">RHK</dt>
-					<dd class="whitespace-pre-wrap">{ikiTerpilih.rhkUraian}</dd>
-				</div>
-				<div>
-					<dt class="text-xs text-muted">IKI</dt>
-					<dd class="whitespace-pre-wrap">{ikiTerpilih.indikator}</dd>
-					<dd class="text-xs text-muted">
-						Target {ikiTerpilih.targetTahunan}
-						{ikiTerpilih.satuan} · {labelJenisIki(ikiTerpilih.jenis)}
-					</dd>
-				</div>
-				<div>
-					<dt class="text-xs text-muted">Aksi</dt>
-					<dd class="whitespace-pre-wrap">{aksiTerpilih.uraian}</dd>
-					<dd class="text-xs text-muted">
-						TW{twCatatan}
-						{targetTw(aksiTerpilih, twCatatan)}{aksiTerpilih.satuan ? ` ${aksiTerpilih.satuan}` : ""}
-					</dd>
-				</div>
-			</dl>
+			<details class="border-y border-border py-3">
+				<summary class="cursor-pointer text-sm font-medium text-accent">Ringkasan target</summary>
+				<dl class="mt-3 grid gap-4 text-sm md:grid-cols-3">
+					<div>
+						<dt class="text-xs font-medium uppercase tracking-wide text-muted">RHK</dt>
+						<dd class="mt-1 whitespace-pre-wrap">{ikiTerpilih.rhkUraian}</dd>
+					</div>
+					<div>
+						<dt class="text-xs font-medium uppercase tracking-wide text-muted">IKI</dt>
+						<dd class="mt-1 whitespace-pre-wrap">{ikiTerpilih.indikator}</dd>
+						<dd class="mt-1 text-xs text-muted">
+							Target {ikiTerpilih.targetTahunan}
+							{ikiTerpilih.satuan} · {labelJenisIki(ikiTerpilih.jenis)}
+						</dd>
+					</div>
+					<div>
+						<dt class="text-xs font-medium uppercase tracking-wide text-muted">Rencana aksi</dt>
+						<dd class="mt-1 whitespace-pre-wrap">{aksiTerpilih.uraian}</dd>
+						<dd class="mt-1 text-xs text-muted">
+							TW{twCatatan}
+							{targetTw(aksiTerpilih, twCatatan)}{aksiTerpilih.satuan ? ` ${aksiTerpilih.satuan}` : ""}
+						</dd>
+					</div>
+				</dl>
+			</details>
 		{/if}
-	</fieldset>
+	</section>
 
-	<div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-		<fieldset class="text-sm">
-			<legend class="mb-2">Jenis tugas</legend>
-			<div class="flex flex-wrap gap-x-4 gap-y-1">
-				<label><input type="radio" bind:group={jenisTugas} value="TUSI" /> Tusi</label>
-				<label><input type="radio" bind:group={jenisTugas} value="TUSI_LAINNYA" /> Tusi lainnya</label>
-				<label><input type="radio" bind:group={jenisTugas} value="NON_TUSI" /> Non Tusi</label>
+	<div class="grid gap-8 border-t border-border-strong pt-5 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-x-10">
+		<section class="space-y-5">
+			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 class="text-sm font-semibold">Jenis dan katalog</h2>
+					<p class="mt-1 text-sm text-muted">Tentukan sumber pekerjaan yang dicatat.</p>
+				</div>
+				<label class="flex min-h-11 items-center gap-2 text-sm">
+					<input type="checkbox" bind:checked={isiManual} />
+					Produk belum tersedia
+				</label>
 			</div>
-		</fieldset>
-		<label class="flex items-center gap-2 text-sm">
-			<input type="checkbox" bind:checked={isiManual} />
-			Isi manual (belum ada di katalog)
-		</label>
-	</div>
 
-	<div class="grid gap-8 md:grid-cols-2 md:gap-x-8">
-		<section class="space-y-4">
-			<p class="text-sm font-medium">Katalog</p>
+			<fieldset>
+				<legend class="mb-2 text-sm font-medium">Jenis tugas</legend>
+				<div class="grid grid-cols-3 overflow-hidden rounded-md border border-border">
+					<label
+						class="flex min-h-11 cursor-pointer items-center justify-center border-r border-border px-2 text-center text-sm has-[:checked]:bg-accent-muted has-[:checked]:font-medium has-[:checked]:text-accent"
+					>
+						<input class="sr-only" type="radio" bind:group={jenisTugas} value="TUSI" />
+						Tusi
+					</label>
+					<label
+						class="flex min-h-11 cursor-pointer items-center justify-center border-r border-border px-2 text-center text-sm has-[:checked]:bg-accent-muted has-[:checked]:font-medium has-[:checked]:text-accent"
+					>
+						<input class="sr-only" type="radio" bind:group={jenisTugas} value="TUSI_LAINNYA" />
+						Tusi lainnya
+					</label>
+					<label
+						class="flex min-h-11 cursor-pointer items-center justify-center px-2 text-center text-sm has-[:checked]:bg-accent-muted has-[:checked]:font-medium has-[:checked]:text-accent"
+					>
+						<input class="sr-only" type="radio" bind:group={jenisTugas} value="NON_TUSI" />
+						Non Tusi
+					</label>
+				</div>
+			</fieldset>
+
 			{#if isiManual}
-				<label class="block text-sm"
-					>Nama produk<input
-						class="mt-1 w-full rounded-md border border-border px-3 py-2"
-						bind:value={namaManualProduk}
-					/></label
-				>
-				<label class="block text-sm"
-					>Nama tahapan<input
-						class="mt-1 w-full rounded-md border border-border px-3 py-2"
-						bind:value={namaManualTahapan}
-					/></label
-				>
+				<div class="space-y-4 border-l-2 border-accent pl-4">
+					<p class="text-xs text-muted">Usulan ini akan ditinjau untuk ditambahkan ke katalog.</p>
+					<label class="block text-sm"
+						>Nama produk <span class="text-muted">(wajib)</span><input
+							class="mt-1 min-h-11 w-full rounded-md border border-border px-3 py-2"
+							bind:value={namaManualProduk}
+						/></label
+					>
+					<label class="block text-sm"
+						>Nama tahapan <span class="text-muted">(wajib)</span><input
+							class="mt-1 min-h-11 w-full rounded-md border border-border px-3 py-2"
+							bind:value={namaManualTahapan}
+						/></label
+					>
+				</div>
 			{:else}
 				{#if (pintasan?.pinJalur.length ?? 0) > 0}
 					<div>
@@ -621,9 +678,9 @@
 					seringIds={idTahapanSering}
 				/>
 				<PilihKatalog
-					label="Aktivitas"
+					label="Aktivitas (opsional)"
 					satuan="aktivitas"
-					placeholder="Opsional. Ketik nama atau kode…"
+					placeholder="Ketik nama atau kode…"
 					opsi={opsiAktivitas}
 					nilai={aktivitasId}
 					onubah={(id) => (aktivitasId = id)}
@@ -632,7 +689,7 @@
 					seringIds={idAktivitasSering}
 				/>
 				<p class="text-xs text-muted">
-					Ketik nama atau kode. Sematkan jalur yang berulang agar catatan berikutnya satu ketukan.
+					Sematkan jalur yang berulang agar catatan berikutnya lebih cepat diisi.
 				</p>
 				{#if produkId && tahapanId}
 					{#if jalurSaatIni}
@@ -647,64 +704,100 @@
 			{/if}
 		</section>
 
-		<section class="space-y-4">
-			<p class="text-sm font-medium">Pelaksanaan</p>
+		<section class="space-y-5">
+			<div>
+				<h2 class="text-sm font-semibold">Pelaksanaan</h2>
+				<p class="mt-1 text-sm text-muted">Isi waktu, uraian pekerjaan, dan output yang dihasilkan.</p>
+			</div>
 			<label class="block text-sm">
-				Uraian
-				<textarea class="mt-1 w-full rounded-md border border-border px-3 py-2" rows="3" bind:value={uraian}></textarea>
+				Uraian <span class="text-muted">(wajib)</span>
+				<textarea
+					class="mt-1 min-h-28 w-full rounded-md border border-border px-3 py-2"
+					rows="4"
+					placeholder="Jelaskan pekerjaan dan hasilnya secara ringkas."
+					bind:value={uraian}
+				></textarea>
 			</label>
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 				<label class="block min-w-0 text-sm"
-					>Mulai<input
-						class="mt-1 w-full min-w-0 rounded-md border border-border px-3 py-2 text-sm"
+					>Mulai <span class="text-muted">(wajib)</span><input
+						class="mt-1 min-h-11 w-full min-w-0 rounded-md border border-border px-3 py-2 text-sm"
 						type="datetime-local"
 						bind:value={waktuMulai}
 					/></label
 				>
 				<label class="block min-w-0 text-sm"
-					>Selesai<input
-						class="mt-1 w-full min-w-0 rounded-md border border-border px-3 py-2 text-sm"
+					>Selesai <span class="text-muted">(wajib)</span><input
+						class="mt-1 min-h-11 w-full min-w-0 rounded-md border border-border px-3 py-2 text-sm"
 						type="datetime-local"
 						bind:value={waktuSelesai}
 					/></label
 				>
 			</div>
 			<label class="block text-sm"
-				>Waktu efektif (menit)<input
-					class="mt-1 w-full rounded-md border border-border px-3 py-2 font-mono"
+				>Waktu efektif (menit) <span class="text-muted">(wajib)</span><input
+					class="mt-1 min-h-11 w-full rounded-md border border-border px-3 py-2 font-mono"
 					type="number"
+					min="1"
 					bind:value={menitEfektif}
 				/></label
 			>
+			{#if durasiKalender > 0}
+				<p class="text-xs text-muted" aria-live="polite">
+					Durasi kalender {labelDurasi(durasiKalender)} · waktu efektif {labelDurasi(Number(menitEfektif) || 0)}
+				</p>
+			{/if}
 			<div class="grid grid-cols-2 gap-3">
 				<label class="block text-sm"
-					>Jumlah output<input
-						class="mt-1 w-full rounded-md border border-border px-3 py-2"
+					>Jumlah output <span class="text-muted">(wajib)</span><input
+						class="mt-1 min-h-11 w-full rounded-md border border-border px-3 py-2"
 						type="number"
+						min="0.01"
+						step="any"
 						bind:value={jumlahOutput}
 					/></label
 				>
 				<label class="block text-sm"
-					>Satuan<input class="mt-1 w-full rounded-md border border-border px-3 py-2" bind:value={satuanOutput} /></label
+					>Satuan <span class="text-muted">(wajib)</span><input
+						class="mt-1 min-h-11 w-full rounded-md border border-border px-3 py-2"
+						placeholder="Dokumen, laporan…"
+						bind:value={satuanOutput}
+					/></label
 				>
 			</div>
 			<label class="block text-sm">
 				Kategori
-				<select class="mt-1 w-full rounded-md border border-border px-3 py-2" bind:value={kategori}>
+				<select class="mt-1 min-h-11 w-full rounded-md border border-border px-3 py-2" bind:value={kategori}>
 					<option value="BIASA">Biasa</option>
 					<option value="PERLU_DISKUSI">Perlu diskusi</option>
 				</select>
 			</label>
 			<label class="block text-sm"
-				>Tautan bukti<input class="mt-1 w-full rounded-md border border-border px-3 py-2" bind:value={buktiUrl} /></label
-			>
-			{#if error}<p class="text-sm text-error">{error}</p>{/if}
-			{#if peringatan}<p class="text-sm text-warning">{peringatan}</p>{/if}
-			<button
-				class="min-h-11 w-full rounded-md bg-accent py-2 text-sm font-medium text-white hover:bg-accent-hover active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50"
-				type="submit"
-				disabled={simpanNonaktif}>{id ? "Simpan perbaikan" : "Simpan draf"}</button
+				>Tautan bukti <span class="text-muted">(opsional)</span><input
+					class="mt-1 min-h-11 w-full rounded-md border border-border px-3 py-2"
+					type="url"
+					inputmode="url"
+					placeholder="https://…"
+					bind:value={buktiUrl}
+				/></label
 			>
 		</section>
+	</div>
+
+	{#if error}<p class="text-sm text-error" role="alert">{error}</p>{/if}
+	{#if peringatan}<p class="text-sm text-warning">{peringatan}</p>{/if}
+
+	<div
+		class="fixed inset-x-0 bottom-0 z-20 grid grid-cols-[auto_1fr] gap-3 border-t border-border-strong bg-surface px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:static sm:z-auto sm:flex sm:justify-end sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0"
+	>
+		<a
+			class="inline-flex min-h-11 items-center justify-center rounded-md border border-border-strong px-4 text-sm text-accent"
+			href="/app/catatan">Batal</a
+		>
+		<button
+			class="min-h-11 rounded-md bg-accent px-6 py-2 text-sm font-medium text-white hover:bg-accent-hover active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 sm:min-w-40"
+			type="submit"
+			disabled={simpanNonaktif}>{id ? "Simpan perbaikan" : "Simpan draf"}</button
+		>
 	</div>
 </form>

@@ -4,18 +4,22 @@
   "scripts": {
     "dev": "bun --watch src/local.ts",
     "start": "bun src/local.ts",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "test": "vitest run"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.2",
     "@logbook/db": "workspace:*",
     "@logbook/schemas": "workspace:*",
     "drizzle-orm": "^0.44.5",
-    "hono": "^4.9.6"
+    "hono": "^4.9.6",
+    "pdf-lib": "^1.17.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260927.1",
     "typescript": "^5.9.2",
+    "vitest": "^3.2.4",
     "wrangler": "^4.142.0"
   }
 }

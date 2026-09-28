@@ -3,17 +3,17 @@
 | Atribut | Isi |
 |---|---|
 | Nama produk | Logbook Kinerja Pegawai ASN Kemenkes |
-| Versi | 1.2 |
-| Status | Draft terkunci hasil wawancara + realisasi prototype |
-| Tanggal | 27 September 2026 (rev. 1.2 — sinkron dengan kode) |
+| Versi | 1.3 |
+| Status | Prototype produksi — sinkron dengan implementasi dan rollout |
+| Tanggal | 28 September 2026 (rev. 1.3 — Access, Reports, and UX Overhaul) |
 | Pemilik produk | Product owner, pegawai Biro OSDM |
-| Realisasi | §25 Status implementasi prototype (kondisi kode saat ini) |
+| Realisasi | §26 Status implementasi produksi rev. 1.3 (kondisi kode saat ini) |
 | Sumber konsep awal | [Percakapan DeepSeek](https://chat.deepseek.com/share/v2zpxd9idx6a3kgvsz) |
 | Referensi resmi | KMK HK.01.07/MENKES/65/2026; Standar Interoperabilitas Logbook Kemenkes v1 2026.09.26 |
 | Tech | [TECH.md](./TECH.md) — Svelte 5, Bun, Hono, Zod, Drizzle, SQLite/D1, Cloudflare |
 | Audiens | Product owner, Biro OSDM, atasan, tim pengembang, keamanan informasi |
 
-Dokumen ini merangkum konsep awal, hasil review, dan keputusan wawancara product owner (27 September 2026). Rilis pertama adalah **prototype aplikasi terpisah** yang melengkapi e-Kinerja, dipakai internal Biro OSDM untuk demo ke pimpinan.
+Dokumen ini merangkum konsep awal, hasil review, keputusan wawancara product owner (27 September 2026), dan realisasi produk sampai rollout 28 September 2026. Rilis pertama adalah **prototype aplikasi terpisah** yang melengkapi e-Kinerja, dipakai internal Biro OSDM untuk demo ke pimpinan.
 
 ---
 
@@ -49,6 +49,8 @@ Regulasi dan acuan: KMK 65/2026, UU ASN, PP 30/2019, PermenPANRB 6/2022, UU PDP 
 - Pegawai dan atasan melihat pemenuhan jam kerja efektif per orang dan per unit organisasi.
 - Atasan dapat menyetujui atau menolak catatan; yang ditolak tidak masuk akumulasi jam efektif.
 - Master pegawai, SKP, dan katalog dapat diisi di prototype (form + impor Excel), tanpa menunggu interoperabilitas.
+- Administrator dapat mengelola akses pengguna, status akun, peran, cakupan unit, reset sandi, dan pencabutan sesi tanpa menghapus riwayat kepegawaian.
+- Pegawai dan pejabat yang berwenang dapat menyusun laporan formal dari dataset yang sama, sesuai cakupan akses, lalu mengunduh PDF atau XLSX.
 
 ### 3.2 Non-tujuan (sengaja tidak dikerjakan di prototype)
 
@@ -101,6 +103,9 @@ Peran “Penyusun SOP” dan “Verifikator SOP” dari konsep awal **tidak masu
 6. Antrian isi manual untuk Biro OSDM.
 7. Impor/ekspor Excel master (setelah file sampel tersedia).
 8. Pusat notifikasi in-app sederhana (bukan email).
+9. Manajemen pengguna: aktivasi/penangguhan akun, reset sandi, pencabutan sesi, peran, cakupan unit, dan audit tindakan.
+10. Laporan kinerja bercakupan peran: aktivitas harian, jam efektif terverifikasi, validasi, keterhubungan katalog, dan kelengkapan SKP; pratinjau serta ekspor PDF/XLSX.
+11. Navigasi responsif berbasis kelompok pekerjaan, pemantauan, dan administrasi.
 
 ### 5.2 Out of scope — fase berikutnya
 
@@ -126,7 +131,10 @@ Konsep awal memakai waktu efektif logbook sebagai pemenuhan jam kerja. Itu rawan
 
 Keputusan:
 
-- Label di UI: **“Jam kerja efektif”**, bukan kehadiran atau absensi.
+- Istilah baku UI:
+  - **Waktu tercatat** = menit efektif catatan TUSI/TUSI Lainnya berstatus `SUBMIT` atau `TERVERIFIKASI`.
+  - **Waktu terverifikasi** = menit efektif catatan TUSI/TUSI Lainnya berstatus `TERVERIFIKASI`.
+  - **Jam kerja efektif** tetap dipakai sebagai nama konsep/rekap, bukan kehadiran atau absensi.
 - Jam kantor resmi 7,5 jam. Target jam kerja efektif **6,5 jam (390 menit)** — 1 jam sisanya untuk istirahat, bank, poliklinik, temu kolega, atau kepentingan pribadi.
 - Yang diakumulasi ke 6,5 jam: **menit efektif yang diisi pegawai** pada catatan **TUSI / TUSI Lainnya** yang **disetujui atasan**.
 - Non TUSI **wajib dicatat** agar atasan melihat ke mana waktu pergi, tetapi **tidak menambah** jam efektif. Pegawai yang hanya mengisi Non TUSI tampil **0 jam efektif**.
@@ -279,6 +287,20 @@ Prioritas: **M** = Must MVP, **S** = Should pasca-MVP dekat, **C** = Could fase 
 | FR-AUTH-03 | Pegawai hanya melihat data sendiri, kecuali peran yang berwenang | M |
 | FR-AUTH-04 | SSO Kemenkes / LDAP | S |
 | FR-AUTH-05 | Reset kata sandi melalui email dinas | M |
+| FR-AUTH-06 | Kredensial dan status akses disimpan di akun terpisah dari data organisasi pegawai | M |
+| FR-AUTH-07 | Status akun AKTIF/DITANGGUHKAN, pencabutan seluruh sesi, dan wajib ganti sandi | M |
+| FR-AUTH-08 | Peran ADMIN, KEPALA_BIRO, dan PENGELOLA_UNIT dengan cakupan unit kerja | M |
+| FR-AUTH-09 | Administrator aktif terakhir dan peran administrator sendiri dilindungi dari pencabutan | M |
+
+### 8.1b Manajemen pengguna
+
+| Kode | Kebutuhan | Prioritas |
+|---|---|---|
+| FR-USR-01 | Daftar pengguna dengan pencarian serta filter unit, peran, dan status | M |
+| FR-USR-02 | Administrator mengatur peran dan satu atau lebih cakupan unit Pengelola Unit | M |
+| FR-USR-03 | Administrator menangguhkan/mengaktifkan akun dengan alasan | M |
+| FR-USR-04 | Reset sandi menghasilkan sandi sementara sekali tampil, mewajibkan penggantian, dan mencabut sesi | M |
+| FR-USR-05 | Tindakan keamanan/peran dicatat pada audit log append-only | M |
 
 ### 8.2 Modul Pegawai
 
@@ -424,6 +446,10 @@ Jam efektif resmi = menit efektif catatan **terverifikasi** berjenis TUSI atau T
 | FR-DB-02d | Klasemen per unit kerja dan per tim kerja | M |
 | FR-DB-03 | Beranda OSDM: usulan katalog, kelengkapan unit piloting | M |
 | FR-LP-01 | Export catatan, rekap jam kerja, SKP | M |
+| FR-LP-02 | Katalog laporan: aktivitas harian, jam efektif terverifikasi, validasi, keterhubungan katalog, kelengkapan SKP | M |
+| FR-LP-03 | Filter periode, Eselon I/unit/tim/pegawai sesuai cakupan akses server | M |
+| FR-LP-04 | Pratinjau laporan menampilkan ringkasan dan detail dari dataset yang sama dengan ekspor | M |
+| FR-LP-05 | Ekspor PDF dan XLSX biner berisi judul, filter, waktu/pembuat, ringkasan, dan detail | M |
 | FR-NT-01 | Pusat notifikasi in-app: ikon di top nav + daftar; tanpa email di prototype | M |
 | FR-NT-02 | Picu: catatan disetujui/ditolak, catatan masuk antrian atasan, usulan katalog ditinjau | M |
 | FR-NT-03 | Tandai sudah dibaca; klik membuka catatan/SKP terkait | M |
@@ -461,6 +487,9 @@ Override darurat Admin Pusat wajib beralasan dan masuk audit trail.
 unit_kerja ── tim_kerja ── anggota_tim
      │                 jabatan           master_satuan
      └──── pegawai ────┘                    │
+            ├── akun ── akun_peran
+            │     ├── sesi
+            │     └── audit_log
             │                               │
             │                               │
             ├── skp
@@ -483,12 +512,13 @@ produk ── tahapan ── proses_bisnis ── proses_bisnis_turunan ── a
 master_jam_kerja
 kalender_libur
 delegasi_validasi
-audit_log
 ```
 
 Prinsip data:
 
 - Soft-delete untuk master dan pegawai.
+- Identitas organisasi pegawai dipisahkan dari kredensial, status akses, sesi, dan peran akun.
+- `audit_log` bersifat append-only dan merekam aktor, target, aksi, alasan, serta nilai sebelum/sesudah.
 - `catatan_harian.produk_id` / `tahapan_id` / `aktivitas_id` nullable jika `isi_manual = true`.
 - `rekap_jam_kerja` dapat berupa tabel materialisasi yang dihitung ulang saat catatan berubah.
 - Jangan simpan NIK/NPWP di MVP.
@@ -776,7 +806,7 @@ Satu file, satu sheet per master. Kosongkan baris jika belum ada; header jangan 
 
 ## 25. Status implementasi prototype (realisasi kode)
 
-> Ditambahkan pada rev. 1.2 (27 September 2026) untuk menyinkronkan PRD dengan prototype yang berjalan di `apps/web`, `apps/api`, `packages/schemas`, dan `packages/db`. Jika §1–§24 (konsep) bertentangan dengan §25 (realisasi), **§25 mencerminkan kondisi kode saat ini**.
+> Snapshot historis rev. 1.2 (27 September 2026). Status ini dipertahankan untuk melihat perubahan antarrevisi dan **telah digantikan oleh §26**. Jika bagian ini bertentangan dengan §26, gunakan §26 sebagai kondisi kode dan produksi saat ini.
 
 ### 25.1 Stack yang terpasang
 
@@ -1008,3 +1038,192 @@ Status: **T** = terpasang, **S** = sebagian, **B** = belum.
 6. Tautan catatan ke IKI/rencana aksi SKP (FR-LG-06).
 7. Konfigurasi target/jam kerja + kalender libur (FR-JK-05/06/07).
 8. Multi-tautan bukti + penandaan Sesuai/Tidak Sesuai (FR-BD-01/05).
+
+---
+
+## 26. Status implementasi produksi rev. 1.3
+
+> Bagian ini adalah sumber kebenaran realisasi per 28 September 2026 setelah **Access, Reports, and UX Overhaul**. Implementasi telah dimigrasikan dan dideploy ke Cloudflare Workers/D1.
+
+### 26.1 Arsitektur akun, akses, dan audit
+
+- Data organisasi tetap berada di `pegawai`; kredensial dan lifecycle akses berada di tabel `akun`.
+- `akun` menyimpan hash sandi, status `AKTIF`/`DITANGGUHKAN`, wajib ganti sandi, waktu login terakhir, dan informasi penangguhan.
+- `akun_peran` menyimpan `ADMIN`, `KEPALA_BIRO`, dan `PENGELOLA_UNIT`. Satu Pengelola Unit dapat menerima satu atau lebih cakupan `unit_kerja`.
+- `sesi` tertaut ke akun dan dapat dicabut tanpa menghapus riwayat.
+- `audit_log` append-only merekam tindakan akun/peran, aktor, target, alasan, serta nilai sebelum/sesudah.
+- Semua pegawai lama telah dibackfill menjadi akun aktif. Kolom autentikasi lama pada `pegawai` dipertahankan sementara untuk rollback.
+- Pegawai baru otomatis menerima akun aktif dengan sandi awal, lalu wajib mengganti sandi.
+- Penangguhan akun, reset sandi, dan penonaktifan pegawai mencabut sesi aktif.
+- Akun sendiri tidak dapat menangguhkan atau mencabut peran administratornya. Administrator aktif terakhir dilindungi.
+- Penghapusan pegawai diganti menjadi penonaktifan aman; SKP, catatan, notifikasi, dan riwayat tidak lagi dihapus berantai.
+- Kepemilikan child SKP diverifikasi berjenjang sebelum membuat/mengubah RHK, IKI, dan rencana aksi.
+
+### 26.2 Matriks akses aktual
+
+| Kapabilitas | Pegawai | Ketua tim/atasan | Pengelola Unit | Kepala Biro | Admin |
+|---|---|---|---|---|---|
+| Catatan dan SKP sendiri | Ya | Ya | Ya | Ya | Ya |
+| Validasi catatan | Tidak | Bawahan dari SKP | Tidak otomatis | Sesuai relasi SKP | Sesuai relasi SKP |
+| Laporan aktivitas/jam/validasi/katalog/SKP | Sendiri | Tim yang dipimpin | Unit yang diberikan | Hierarki biro | Semua |
+| Kelola akun dan peran | Tidak | Tidak | Tidak | Tidak | Ya |
+| Kelola master | Tidak | Tidak | Tidak | Sesuai UI administrasi | Ya |
+| Lihat audit akun | Tidak | Tidak | Tidak | Tidak | Ya |
+
+Kepemimpinan tim dan relasi validasi tetap diturunkan dari Tim/SKP; keduanya tidak diduplikasi sebagai peran manual.
+
+### 26.3 Manajemen pengguna
+
+Rute web: `/app/administrasi/pengguna`.
+
+Fungsi yang terpasang:
+
+- Ringkasan akun aktif, wajib ganti sandi, ditangguhkan, dan Pengelola Unit.
+- Pencarian nama/NIP/jabatan dan filter status, peran, serta unit.
+- Tabel formal pengguna dengan organisasi, peran, status, dan login terakhir.
+- Pengaturan peran Admin, Kepala Biro, dan Pengelola Unit multiscoped.
+- Penangguhan wajib alasan dan aktivasi kembali.
+- Reset sandi aman: sandi sementara ditampilkan sekali, pengguna wajib menggantinya, seluruh sesi lama dicabut.
+- Audit tindakan akun dan perubahan peran.
+
+Endpoint:
+
+```
+GET  /api/pengguna
+GET  /api/pengguna/:id/audit
+PUT  /api/pengguna/:id/peran
+POST /api/pengguna/:id/reset-sandi
+POST /api/pengguna/:id/tangguhkan
+POST /api/pengguna/:id/aktifkan
+```
+
+### 26.4 Laporan kinerja
+
+Rute web: `/app/laporan`.
+
+Jenis laporan:
+
+1. Aktivitas harian.
+2. Jam efektif terverifikasi.
+3. Hasil validasi catatan.
+4. Keterhubungan katalog kinerja.
+5. Kelengkapan SKP.
+
+Alur UI: **jenis laporan → periode → cakupan organisasi → pratinjau → PDF/XLSX**.
+
+Aturan:
+
+- Filter tersedia untuk periode, unit, tim, dan pegawai.
+- API selalu menerapkan cakupan akses; pilihan klien tidak dapat memperluas hak akses.
+- Pratinjau dan ekspor memakai dataset builder yang sama.
+- Pratinjau dipaginasi oleh server dengan pilihan 25, 50, atau 100 baris; ringkasan tetap menghitung seluruh hasil.
+- Perubahan jenis/filter mengembalikan pratinjau ke halaman pertama; ekspor tetap mencakup seluruh hasil sesuai filter, bukan hanya halaman aktif.
+- PDF dibuat dengan `pdf-lib`; XLSX dibuat dengan `xlsx`.
+- Berkas memuat judul, periode/filter, waktu pembuatan, pembuat, ringkasan, dan baris detail.
+
+Endpoint:
+
+```
+POST /api/laporan/preview
+POST /api/laporan/export/pdf
+POST /api/laporan/export/xlsx
+```
+
+### 26.5 Terminologi waktu
+
+Terminologi baku seluruh UI:
+
+- **Waktu tercatat**: catatan TUSI/TUSI Lainnya berstatus `SUBMIT` dan `TERVERIFIKASI`.
+- **Waktu terverifikasi**: catatan TUSI/TUSI Lainnya berstatus `TERVERIFIKASI` saja.
+- `DRAFT`, `DITOLAK`, dan `NON_TUSI` tidak menambah kedua angka tersebut.
+- Target default tetap 390 menit per hari.
+- Rekap jam efektif memprioritaskan waktu terverifikasi; waktu tercatat menjadi konteks sekunder.
+
+### 26.6 Navigasi dan UX aktual
+
+Navigasi desktop dikelompokkan:
+
+- **Pekerjaan saya:** Beranda, Catatan harian, SKP.
+- **Pemantauan:** Rekap jam efektif, Validasi catatan, Laporan kinerja.
+- **Administrasi:** Pegawai & organisasi, Katalog kinerja, Manajemen pengguna.
+
+Navigasi HP memakai empat tujuan tetap: **Beranda, Catatan, SKP, Menu**. Menu membuka Pemantauan dan Administrasi sesuai peran. Badge menampilkan jumlah validasi yang menunggu.
+
+Penyempurnaan halaman:
+
+- Beranda memprioritaskan tindakan pribadi dan memisahkan waktu tercatat/terverifikasi.
+- Catatan harian memiliki narasi tujuan, filter berlabel, pencarian uraian/produk, ringkasan hasil, kalender, empty state, dan bulk action sticky.
+- SKP memakai langkah penyelesaian terpandu, penjelasan Core/Beyond, aksi baris terlihat, dan saran langkah berikutnya.
+- Rekap jam efektif menampilkan rentang aktif dan tidak menekankan peringkat ketika semua angka nol.
+- Validasi catatan memperjelas antrian/riwayat, kolom, filter ringkasan, alasan penolakan wajib, dan konfirmasi massal.
+- Pegawai menampilkan konteks status/peran/hierarki, kolom aksi eksplisit, kontrol perpindahan massal sticky, dan narasi penonaktifan aman.
+- Komponen bersama tersedia untuk page header, empty state, selection bar, navigasi catatan, dan ringkasan waktu.
+
+### 26.7 Model data aktual rev. 1.3
+
+Tabel inti:
+
+```
+unit_kerja ── tim_kerja ── pegawai ── akun ── akun_peran
+                                │         └── sesi
+                                │
+                                ├── skp ── rhk_pimpinan ── rhk ── iki ── rencana_aksi
+                                ├── catatan_harian ── usulan_katalog
+                                ├── pin_katalog
+                                └── notifikasi
+
+produk ── tahapan ── aktivitas
+akun ── audit_log
+```
+
+Tambahan rev. 1.3:
+
+- `pegawai.status`.
+- `akun`, `akun_peran`, dan `audit_log`.
+- `sesi.akun_id` dan `sesi.dicabut_pada`.
+- `catatan_harian.diajukan_pada`.
+- Snapshot `unit_kerja_id` dan `tim_kerja_id` pada catatan untuk menjaga konteks organisasi historis.
+- Indeks akun/peran/sesi, audit, pegawai-unit-tim, serta catatan-periode/status untuk laporan.
+- Constraint unik satu SKP per pegawai per tahun.
+
+### 26.8 Status kebutuhan yang berubah sejak rev. 1.2
+
+| Kode | Status rev. 1.3 | Catatan |
+|---|---|---|
+| FR-AUTH-02 | T | RBAC relasional + Pengelola Unit |
+| FR-AUTH-03 | T | Cakupan laporan ditegakkan server |
+| FR-AUTH-05 | S | Reset oleh admin dengan sandi sementara; belum melalui email |
+| FR-AUTH-06–09 | T | Akun terpisah, lifecycle, scoped role, last-admin protection |
+| FR-USR-01–05 | T | API dan UI Manajemen Pengguna |
+| FR-PG-01 | T | Status pegawai tersedia |
+| FR-PG-03 | T | Penonaktifan aman menggantikan hard-delete |
+| FR-PG-04 | T | Cari + filter hierarki/status/peran |
+| FR-PG-09 | S | Audit tindakan akun/peran tersedia; audit semua master belum lengkap |
+| FR-SKP-09 | T | Laporan kelengkapan SKP tersedia |
+| FR-LG-09 | T | Filter dan pencarian daftar |
+| FR-LG-12 | T | Tampilan kalender tersedia |
+| FR-VL-05 | T | Bulk approve + konfirmasi |
+| FR-LP-01 | T | Ekspor laporan PDF/XLSX |
+| FR-LP-02–05 | T | Lima dataset, cakupan server, pratinjau, ekspor biner |
+| FR-AU-01 | S | Audit akun/peran terpasang; perluasan audit domain operasional tetap lanjutan |
+
+### 26.9 Verifikasi dan rollout
+
+- Migrasi D1 bersifat aditif dan telah diuji terhadap backup produksi sebelum diterapkan.
+- Hasil backfill produksi: seluruh 112 pegawai memiliki akun aktif; tidak ada sesi tanpa akun dan tidak ada catatan lama tanpa snapshot unit.
+- Tes otomatis mencakup aturan jam efektif, matriks otorisasi, signature PDF, dan parsing XLSX.
+- Biome, migrasi lokal, API Worker dry-run, web production build, serta smoke test browser desktop/HP lulus.
+- Urutan rollout: backup D1 → migrasi → verifikasi row count → deploy API → deploy web → smoke test produksi.
+- Produksi:
+  - Web: `https://logbook-pegawai.mujaki.workers.dev`
+  - API: `https://logbook-api.mujaki.workers.dev`
+
+### 26.10 Prioritas lanjutan setelah rev. 1.3
+
+1. Usulan katalog OSDM: grouping, setujui/tolak, dan notifikasi hasil.
+2. Impor/ekspor Excel master dan katalog.
+3. Memperluas audit append-only ke seluruh perubahan master dan transaksi kritis.
+4. Delegasi validasi, SLA, reminder, dan email.
+5. Konfigurasi target/jam kerja, kalender libur, cuti/izin.
+6. Multi-tautan atau unggah bukti dengan penandaan Sesuai/Tidak Sesuai.
+7. SSO Kemenkes dan interoperabilitas API Hub.

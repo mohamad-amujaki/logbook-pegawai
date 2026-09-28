@@ -234,9 +234,13 @@ export const skpRoutes = new Hono()
 		return c.json({ id });
 	})
 	.post("/rhk", async (c) => {
+		const user = c.get("user");
 		const parsed = rhkSchema.safeParse(await c.req.json());
 		if (!parsed.success) {
 			return c.json({ error: "Uraian RHK minimal 3 karakter." }, 400);
+		}
+		if (!(await milikPimpinan(user.id, parsed.data.rhkPimpinanId))) {
+			return c.json({ error: "Sasaran pimpinan ini bukan milik SKP Anda." }, 403);
 		}
 		const id = buatId("rhk");
 		await db.insert(rhk).values({
@@ -252,12 +256,16 @@ export const skpRoutes = new Hono()
 		return c.json({ id });
 	})
 	.post("/iki", async (c) => {
+		const user = c.get("user");
 		const parsed = ikiSchema.safeParse(await c.req.json());
 		if (!parsed.success) {
 			return c.json(
 				{ error: "IKI belum lengkap. Isi indikator, target, satuan, jenis, dan bobot." },
 				400,
 			);
+		}
+		if (!(await milikRhk(user.id, parsed.data.rhkId))) {
+			return c.json({ error: "RHK ini bukan milik SKP Anda." }, 403);
 		}
 		const id = buatId("iki");
 		await db.insert(iki).values({
@@ -274,6 +282,7 @@ export const skpRoutes = new Hono()
 		return c.json({ id });
 	})
 	.post("/rencana-aksi", async (c) => {
+		const user = c.get("user");
 		const body = await c.req.json();
 		if (!body.ikiId || !body.rhkId) {
 			return c.json({ error: "Rencana aksi harus menempel ke IKI." }, 400);
@@ -282,6 +291,12 @@ export const skpRoutes = new Hono()
 		if (!parsed.success) {
 			const first = parsed.error.issues[0];
 			return c.json({ error: first?.message ?? "Uraian rencana aksi minimal 3 karakter." }, 400);
+		}
+		if (
+			!(await milikIki(user.id, String(body.ikiId))) ||
+			!(await milikRhk(user.id, String(body.rhkId)))
+		) {
+			return c.json({ error: "IKI atau RHK ini bukan milik SKP Anda." }, 403);
 		}
 		const id = buatId("aks");
 		await db.insert(rencanaAksi).values({

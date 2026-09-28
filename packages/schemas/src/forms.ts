@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { ASPEK_IKI, JENIS_IKI, JENIS_TUGAS, KATEGORI_CATATAN } from "./enums";
+import {
+	ASPEK_IKI,
+	JENIS_IKI,
+	JENIS_LAPORAN,
+	JENIS_TUGAS,
+	KATEGORI_CATATAN,
+	PERAN_AKUN,
+} from "./enums";
 
 const nip = z
 	.string()
@@ -123,6 +130,7 @@ export const timKerjaSchema = z.object({
 export const timKerjaUbahSchema = z.object({
 	kode: z.string().min(1),
 	nama: z.string().min(2),
+	unitKerjaId: z.string().min(1),
 	status: z.enum(["aktif", "nonaktif"]),
 	ketuaPegawaiId: z.string().min(1).nullable(),
 });
@@ -131,6 +139,48 @@ export const anggotaTimSchema = z.object({
 	pegawaiIds: z.array(z.string().min(1)).min(1),
 	timKerjaId: z.string().min(1),
 });
+
+export const statusAkunSchema = z.object({
+	alasan: z.string().trim().min(3, "Alasan minimal 3 karakter.").max(500),
+});
+
+export const peranAkunSchema = z
+	.object({
+		peran: z.enum(PERAN_AKUN),
+		unitKerjaId: z.string().min(1).nullable().optional(),
+	})
+	.refine((v) => v.peran !== "PENGELOLA_UNIT" || Boolean(v.unitKerjaId), {
+		message: "Cakupan unit kerja wajib dipilih untuk Pengelola unit.",
+		path: ["unitKerjaId"],
+	});
+
+export const daftarPeranAkunSchema = z.object({
+	peran: z.array(peranAkunSchema).max(20),
+});
+
+export const laporanFilterSchema = z
+	.object({
+		jenis: z.enum(JENIS_LAPORAN),
+		dari: z.string().date(),
+		sampai: z.string().date(),
+		unitKerjaId: z.string().min(1).optional(),
+		timKerjaId: z.string().min(1).optional(),
+		pegawaiId: z.string().min(1).optional(),
+		status: z.string().optional(),
+		jenisTugas: z.enum(JENIS_TUGAS).optional(),
+	})
+	.refine((v) => v.dari <= v.sampai, {
+		message: "Tanggal awal tidak boleh setelah tanggal akhir.",
+		path: ["sampai"],
+	});
+
+export const laporanPreviewSchema = z.intersection(
+	laporanFilterSchema,
+	z.object({
+		page: z.coerce.number().int().min(1).default(1),
+		pageSize: z.coerce.number().int().min(1).max(100).default(25),
+	}),
+);
 
 const tmt = z
 	.string()

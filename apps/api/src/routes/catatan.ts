@@ -167,6 +167,7 @@ async function kirimCatatan(row: typeof catatanHarian.$inferSelect) {
 			catatanValidasi: null,
 			divalidasiOlehId: null,
 			divalidasiPada: null,
+			diajukanPada: now,
 			updatedAt: now,
 		})
 		.where(eq(catatanHarian.id, row.id));
@@ -514,6 +515,7 @@ export const catatanRoutes = new Hono()
 					catatanValidasi: null,
 					divalidasiOlehId: null,
 					divalidasiPada: null,
+					diajukanPada: now,
 					updatedAt: now,
 				})
 				.where(and(eq(catatanHarian.pegawaiId, user.id), inArray(catatanHarian.id, unik)));
@@ -568,6 +570,8 @@ export const catatanRoutes = new Hono()
 			await db.insert(catatanHarian).values({
 				id,
 				pegawaiId: user.id,
+				unitKerjaIdSnapshot: user.unitKerjaId,
+				timKerjaIdSnapshot: user.timKerjaId,
 				...cek.nilai,
 				status: "DRAFT",
 			});

@@ -1,5 +1,5 @@
-import { db, notifikasi, pegawai, skp, timKerja } from "@logbook/db";
-import { and, eq } from "drizzle-orm";
+import { catatanHarian, db, notifikasi, pegawai, skp, timKerja } from "@logbook/db";
+import { and, count, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
 
@@ -42,6 +42,22 @@ export const meRoutes = new Hono().use(requireAuth).get("/", async (c) => {
 		.from(timKerja)
 		.where(eq(timKerja.ketuaPegawaiId, user.id))
 		.limit(1);
+	const bawahan = await db
+		.select({ id: skp.pegawaiId })
+		.from(skp)
+		.where(and(eq(skp.tahun, new Date().getFullYear()), eq(skp.pemberiPertimbanganId, user.id)));
+	const idsBawahan = bawahan.map((b) => b.id);
+	const menungguValidasi =
+		idsBawahan.length === 0
+			? 0
+			: ((
+					await db
+						.select({ jumlah: count() })
+						.from(catatanHarian)
+						.where(
+							and(inArray(catatanHarian.pegawaiId, idsBawahan), eq(catatanHarian.status, "SUBMIT")),
+						)
+				)[0]?.jumlah ?? 0);
 
 	return c.json({
 		user: {
@@ -49,6 +65,11 @@ export const meRoutes = new Hono().use(requireAuth).get("/", async (c) => {
 			timNama: tim[0]?.nama ?? null,
 		},
 		ketuaTim: pimpin[0] ?? null,
+		menungguValidasi,
+		dapatMemvalidasi: idsBawahan.length > 0,
+		dapatMelihatLaporan:
+			user.isAdmin || user.isKepalaBiro || user.unitKelolaIds.length > 0 || Boolean(pimpin[0]),
+		dapatMengelolaPengguna: user.isAdmin,
 		belumDibaca: unread.length,
 		skpLengkap: Boolean(
 			header?.pemberiPertimbanganId && header?.pejabatPenilaiId && header?.atasanPejabatPenilaiId,

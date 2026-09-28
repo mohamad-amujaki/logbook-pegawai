@@ -2,6 +2,7 @@
 	import { onMount } from "svelte";
 	import { ApiError, api, type Me } from "$lib/api";
 	import IkonAksi from "$lib/IkonAksi.svelte";
+	import PageHeader from "$lib/PageHeader.svelte";
 	import PanelFokus from "$lib/PanelFokus.svelte";
 	import SelectCari from "$lib/SelectCari.svelte";
 
@@ -42,6 +43,7 @@
 	let units = $state<Unit[]>([]);
 	let pilih = $state<string[]>([]);
 	let kata = $state("");
+	let eselonId = $state("");
 	let unitId = $state("");
 	let saring = $state("");
 	let timId = $state("");
@@ -75,6 +77,7 @@
 	const timUnit = $derived(unitId ? tim.filter((t) => t.unitKerjaId === unitId) : tim);
 	const tersaring = $derived.by(() => {
 		let list = pegawai;
+		if (eselonId) list = list.filter((p) => p.indukId === eselonId);
 		if (unitId) list = list.filter((p) => p.unitKerjaId === unitId);
 		if (saring === "kosong") list = list.filter((p) => !p.timKerjaId);
 		else if (saring) list = list.filter((p) => p.timKerjaId === saring);
@@ -104,6 +107,7 @@
 	const labelSaring = $derived.by(() => {
 		const potong: string[] = [];
 		if (unitId) potong.push(units.find((u) => u.id === unitId)?.nama ?? "unit");
+		else if (eselonId) potong.push(units.find((u) => u.id === eselonId)?.nama ?? "Eselon I");
 		if (saring === "kosong") potong.push("belum ada tim");
 		else if (saring) potong.push(tim.find((t) => t.id === saring)?.nama ?? "tim");
 		if (kataCari) potong.push(`“${kata.trim()}”`);
@@ -127,11 +131,13 @@
 		})),
 	);
 	const opsiUnit = $derived(
-		unitKerja.map((u) => ({
+		unitKerja
+			.filter((u) => !eselonId || u.indukId === eselonId)
+			.map((u) => ({
 			id: u.id,
 			label: u.nama,
 			sub: u.indukNama ? `${u.indukNama} · ${u.kode}` : u.kode,
-		})),
+			})),
 	);
 	const opsiUnitForm = $derived(
 		unitKerja
@@ -199,6 +205,16 @@
 		if (timId) {
 			const t = tim.find((x) => x.id === timId);
 			if (t && id && t.unitKerjaId !== id) timId = "";
+		}
+		halaman = 1;
+	}
+
+	function setEselon(id: string) {
+		eselonId = id;
+		const unit = units.find((u) => u.id === unitId);
+		if (unit && id && unit.indukId !== id) {
+			unitId = "";
+			saring = "";
 		}
 		halaman = 1;
 	}
@@ -379,7 +395,7 @@
 			pilih = pilih.filter((x) => x !== id);
 			if (tampil.length === 1 && halaman > 1) halaman -= 1;
 			tutupPanel();
-			pesan = `${nama} dihapus.`;
+			pesan = `${nama} dinonaktifkan dan tidak lagi dapat masuk. Riwayat tetap tersimpan.`;
 			await muat();
 		} catch (err) {
 			errorPanel = err instanceof Error ? err.message : "Tidak dapat menghapus pegawai.";
@@ -469,12 +485,21 @@
 	}
 </script>
 
-<div class="flex flex-wrap items-baseline justify-between gap-4">
-	<h2 class="text-lg font-semibold">Pegawai</h2>
-	<IkonAksi jenis="tambah" label="Pegawai baru" onklik={bukaBaru} />
+<PageHeader
+	judul="Pegawai"
+	deskripsi="Kelola pegawai aktif, penempatan dalam struktur organisasi, tim kerja, dan peran akses."
+>
+	{#snippet anak()}<IkonAksi jenis="tambah" label="Pegawai baru" onklik={bukaBaru} />{/snippet}
+</PageHeader>
+
+<div class="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+	<p><strong>{pegawai.length}</strong> pegawai aktif</p>
+	<p><strong>{pegawai.filter((p) => p.isAdmin).length}</strong> admin</p>
+	<p><strong>{pegawai.filter((p) => p.isKepalaBiro).length}</strong> kepala biro</p>
+	<p><strong>{tanpaTim}</strong> belum ditempatkan dalam tim</p>
 </div>
 
-<div class="mt-6 grid gap-4 md:grid-cols-3">
+<div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 	<div>
 		<label class="text-sm font-medium" for="pg-cari">Cari</label>
 		<input
@@ -485,6 +510,15 @@
 			oninput={() => (halaman = 1)}
 		/>
 	</div>
+	<SelectCari
+		label="Eselon I"
+		placeholder="Semua Eselon I"
+		pesanKosong="Tidak ada Eselon I yang cocok."
+		satuan="Eselon I"
+		opsi={opsiEselon}
+		nilai={eselonId}
+		onubah={setEselon}
+	/>
 	<SelectCari
 		label="Unit kerja"
 		placeholder="Semua unit"
@@ -522,7 +556,8 @@
 			<th class="border-b border-border-strong px-3 py-2">Jabatan</th>
 			<th class="border-b border-border-strong px-3 py-2">Unit kerja</th>
 			<th class="border-b border-border-strong px-3 py-2">Tim</th>
-			<th class="border-b border-border-strong px-3 py-2"></th>
+			<th class="border-b border-border-strong px-3 py-2">Status / peran</th>
+			<th class="border-b border-border-strong px-3 py-2">Aksi</th>
 		</tr>
 	</thead>
 	<tbody>
@@ -550,6 +585,12 @@
 					<p class="text-xs text-muted">{p.indukNama ?? p.unitKode}</p>
 				</td>
 				<td class="border-b border-border px-3 py-3">{p.timNama ?? "Belum ada tim"}</td>
+				<td class="border-b border-border px-3 py-3">
+					<p>Aktif</p>
+					<p class="text-xs text-muted">
+						{[p.isAdmin ? "Admin" : "", p.isKepalaBiro ? "Kepala Biro" : ""].filter(Boolean).join(" · ") || "Pegawai"}
+					</p>
+				</td>
 				<!-- biome-ignore lint/a11y/useKeyWithClickEvents: menahan klik baris agar aksi tombol tidak ikut memilih baris -->
 				<td class="border-b border-border px-3 py-3" onclick={(e) => e.stopPropagation()}>
 					<div class="flex items-center gap-3">
@@ -562,8 +603,8 @@
 			</tr>
 		{:else}
 			<tr>
-				<td class="px-3 py-6 text-sm text-muted" colspan="6">
-					{#if kataCari || unitId || saring}
+				<td class="px-3 py-6 text-sm text-muted" colspan="7">
+					{#if kataCari || eselonId || unitId || saring}
 						Tidak ada pegawai yang cocok dengan filter ini.
 					{:else}
 						Belum ada data pegawai.
@@ -576,7 +617,7 @@
 </div>
 
 {#if pilih.length > 0}
-	<form class="mt-6 space-y-3 border-t border-border pt-4 text-sm" onsubmit={pindah}>
+	<form class="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 mt-6 space-y-3 border border-border-strong bg-surface p-4 text-sm shadow-sm lg:bottom-3" onsubmit={pindah}>
 		<p class="text-sm">
 			{pilih.length} dipilih
 			{#if pilih.length <= 3}
@@ -652,16 +693,17 @@
 
 {#if panel}
 	<PanelFokus
-		judul={panel.mode === "baru" ? "Pegawai baru" : panel.mode === "ubah" ? "Ubah pegawai" : "Hapus pegawai"}
+		judul={panel.mode === "baru" ? "Pegawai baru" : panel.mode === "ubah" ? "Ubah pegawai" : "Nonaktifkan pegawai"}
 		ontutup={tutupPanel}
 	>
 		{#if panel.mode === "hapus"}
 			<p class="text-sm">
-				Hapus {panel.nama}
+				Nonaktifkan {panel.nama}
 				<span class="font-mono text-xs text-muted">({panel.nip})</span>?
 			</p>
 			<p class="mt-3 text-sm text-muted">
-				Sesi, catatan harian, dan SKP orang ini ikut terhapus. Peran atasan di SKP pegawai lain dikosongkan.
+				Pegawai tidak lagi dapat masuk atau dipilih untuk pekerjaan baru. Catatan harian dan SKP yang sudah ada tetap
+				tersimpan sebagai riwayat.
 			</p>
 			{#if errorPanel}<p class="mt-3 text-sm text-error">{errorPanel}</p>{/if}
 			<div class="mt-4 flex flex-wrap items-center gap-4">
@@ -669,7 +711,7 @@
 					class="rounded-md bg-error px-4 py-2 text-sm font-medium text-white"
 					type="button"
 					disabled={simpanPanel}
-					onclick={hapusPanel}>Ya, hapus</button
+					onclick={hapusPanel}>Ya, nonaktifkan</button
 				>
 				<button class="text-sm text-accent" type="button" onclick={tutupPanel}>Batal</button>
 			</div>

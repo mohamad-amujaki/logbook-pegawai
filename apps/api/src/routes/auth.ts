@@ -1,4 +1,4 @@
-import { db, hashPassword, pegawai, sesi, verifyPassword } from "@logbook/db";
+import { akun, db, hashPassword, pegawai, sesi, verifyPassword } from "@logbook/db";
 import { gantiSandiSchema, loginSchema } from "@logbook/schemas";
 import { eq } from "drizzle-orm";
 import { Hono, type Context } from "hono";
@@ -61,11 +61,26 @@ export const authRoutes = new Hono()
 			return gagalLogin(c, "Terlalu banyak percobaan. Coba lagi 15 menit.", undefined, 429);
 		}
 
-		const found = await db.select().from(pegawai).where(eq(pegawai.nip, nip)).limit(1);
+		const found = await db
+			.select({
+				akunId: akun.id,
+				pegawaiId: pegawai.id,
+				namaLengkap: pegawai.namaLengkap,
+				passwordHash: akun.passwordHash,
+				wajibGantiSandi: akun.wajibGantiSandi,
+				status: akun.status,
+			})
+			.from(pegawai)
+			.innerJoin(akun, eq(akun.pegawaiId, pegawai.id))
+			.where(eq(pegawai.nip, nip))
+			.limit(1);
 		const user = found[0];
 		if (!user) {
 			record(nip);
 			return gagalLogin(c, "NIP tidak terdaftar.", "nip", 401);
+		}
+		if (user.status !== "AKTIF") {
+			return gagalLogin(c, "Akses akun ditangguhkan. Hubungi administrator.", undefined, 401);
 		}
 
 		const ok = await verifyPassword(sandi, user.passwordHash);
@@ -78,9 +93,14 @@ export const authRoutes = new Hono()
 		const berakhir = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 		await db.insert(sesi).values({
 			id: sid,
-			pegawaiId: user.id,
+			pegawaiId: user.pegawaiId,
+			akunId: user.akunId,
 			berakhirPada: berakhir,
 		});
+		await db
+			.update(akun)
+			.set({ terakhirLoginPada: new Date().toISOString(), updatedAt: new Date().toISOString() })
+			.where(eq(akun.id, user.akunId));
 
 		setCookie(c, "logbook_sesi", sid, {
 			httpOnly: true,
@@ -116,6 +136,10 @@ export const authRoutes = new Hono()
 			return c.json({ error: pesan, field: "sandiBaru" }, 400);
 		}
 		const hash = await hashPassword(sandiBaru);
+		await db
+			.update(akun)
+			.set({ passwordHash: hash, wajibGantiSandi: false, updatedAt: new Date().toISOString() })
+			.where(eq(akun.id, user.akunId));
 		await db
 			.update(pegawai)
 			.set({ passwordHash: hash, wajibGantiSandi: false, updatedAt: new Date().toISOString() })

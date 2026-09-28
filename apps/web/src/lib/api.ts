@@ -49,6 +49,8 @@ export type Me = {
 		wajibGantiSandi: boolean;
 		isAdmin: boolean;
 		isKepalaBiro: boolean;
+		peran: ("ADMIN" | "KEPALA_BIRO" | "PENGELOLA_UNIT")[];
+		unitKelolaIds: string[];
 		timKerjaId: string | null;
 		timNama: string | null;
 	};
@@ -58,4 +60,8 @@ export type Me = {
 	pejabatPenilai: OrangRingkas | null;
 	atasanPejabatPenilai: OrangRingkas | null;
 	ketuaTim: { id: string; nama: string } | null;
+	menungguValidasi: number;
+	dapatMemvalidasi: boolean;
+	dapatMelihatLaporan: boolean;
+	dapatMengelolaPengguna: boolean;
 };

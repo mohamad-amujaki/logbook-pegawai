@@ -5,6 +5,7 @@
 	import { ASPEK_IKI, JENIS_IKI, type AspekIki, type JenisIki } from "@logbook/schemas";
 	import { ApiError, api, type Me } from "$lib/api";
 	import IkonAksi from "$lib/IkonAksi.svelte";
+	import PageHeader from "$lib/PageHeader.svelte";
 	import PanelFokus from "$lib/PanelFokus.svelte";
 	import PilihPegawai, { type Orang } from "$lib/PilihPegawai.svelte";
 
@@ -95,6 +96,8 @@
 	const bobotBeyond = $derived(semuaIki.filter((i) => i.jenis === "BEYOND").reduce((n, i) => n + i.bobot, 0));
 	const ikiBeraksi = $derived(semuaIki.filter((i) => i.rencanaAksi.length > 0).length);
 	const aksiLengkap = $derived(semuaIki.length > 0 && ikiBeraksi === semuaIki.length);
+	const identitasLengkap = $derived(Boolean(pemberi && penilai && atasanPenilai));
+	const langkahAktif = $derived(!identitasLengkap ? 1 : pohon.length === 0 ? 2 : semuaIki.length === 0 ? 3 : !aksiLengkap ? 4 : 5);
 	const baris = $derived.by((): Baris[] => {
 		const rows: Baris[] = [];
 		let no = 0;
@@ -461,10 +464,24 @@
 	}
 </script>
 
-<h1 class="text-xl font-semibold">SKP {new Date().getFullYear()}</h1>
-<p class="mt-1 text-sm text-muted">
-	Klik baris pada tabel, lalu pilih aksi. Form buka di panel supaya fokus ke satu isian.
-</p>
+<PageHeader
+	judul="SKP {new Date().getFullYear()}"
+	deskripsi="Susun sasaran dan indikator secara bertahap. Data yang sudah valid tetap dapat disimpan meski langkah lain belum lengkap."
+/>
+
+<ol class="mt-6 grid gap-2 text-sm sm:grid-cols-5">
+	{#each ["Atur penilai", "Tambah sasaran", "Isi RHK dan IKI", "Buat rencana aksi", "Tinjau kelengkapan"] as nama, i}
+		<li
+			class="border px-3 py-2"
+			class:border-accent={langkahAktif === i + 1}
+			class:bg-accent-muted={langkahAktif === i + 1}
+			class:border-border={langkahAktif !== i + 1}
+		>
+			<span class="font-mono text-xs text-muted">{i + 1}</span>
+			<span class="ml-1 font-medium">{nama}</span>
+		</li>
+	{/each}
+</ol>
 
 {#if siapIdentitas}
 	<section class="mt-8 w-full max-w-4xl">
@@ -495,6 +512,7 @@
 			</dl>
 			{#if pesan}<p class="mt-3 text-sm text-success">{pesan}</p>{/if}
 		{:else}
+			<p class="mt-2 text-sm text-muted">Langkah 1: tentukan pihak yang memberi pertimbangan dan menilai kinerja Anda.</p>
 			<form class="mt-4 space-y-6" onsubmit={simpanHeader}>
 				<PilihPegawai
 					label="Pemberi pertimbangan (atasan langsung)"
@@ -562,7 +580,7 @@
 
 <section class="mt-12">
 	<div class="flex flex-wrap items-baseline justify-between gap-3">
-		<h2 class="text-lg font-semibold">A. Utama</h2>
+		<h2 class="text-lg font-semibold">Sasaran dan indikator kinerja</h2>
 		<p class="text-sm tabular-nums">
 			<span class={bobotCore === 100 ? "text-success" : "text-warning"}>Core {bobotCore}/100</span>
 			<span class="text-muted"> · </span>
@@ -574,7 +592,19 @@
 		</p>
 	</div>
 	<p class="mt-1 text-sm text-muted">
-		Setiap IKI wajib punya minimal satu rencana aksi. Klik baris untuk menambah atau mengubah.
+		Core adalah kontribusi utama dengan total bobot acuan 100. Beyond adalah kontribusi tambahan dengan bobot acuan
+		hingga 20. Acuan bobot membantu peninjauan dan tidak mengunci penyimpanan pekerjaan yang valid.
+	</p>
+	<p class="mt-2 text-sm text-muted">
+		{#if pohon.length === 0}
+			Langkah berikutnya: tambah sasaran pimpinan yang menjadi dasar RHK Anda.
+		{:else if semuaIki.length === 0}
+			Langkah berikutnya: pilih sasaran, tambahkan RHK, lalu isi IKI.
+		{:else if !aksiLengkap}
+			Langkah berikutnya: tambahkan minimal satu rencana aksi pada setiap IKI. Klik baris IKI untuk memilih aksi.
+		{:else}
+			Semua IKI sudah memiliki rencana aksi. Tinjau target, satuan, dan bobot sebelum selesai.
+		{/if}
 	</p>
 
 	<div class="mt-4">
@@ -746,7 +776,7 @@
 	</div>
 
 	{#if pohon.length === 0}
-		<p class="mt-6 text-sm text-muted">Belum ada baris. Tambah sasaran pimpinan, lalu isi RHK dan IKI.</p>
+		<p class="mt-6 text-sm text-muted">Belum ada sasaran. Gunakan “Sasaran pimpinan” di atas untuk memulai.</p>
 	{/if}
 </section>
 

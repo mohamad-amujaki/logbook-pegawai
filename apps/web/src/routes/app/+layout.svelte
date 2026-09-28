@@ -6,25 +6,15 @@
 	import AvatarInisial from "$lib/AvatarInisial.svelte";
 
 	let { children, data } = $props();
-	let me = $state<Me | null>(data.me);
-
-	$effect(() => {
-		me = data.me;
-	});
+	let meTerbaru = $state<Me | null>(null);
+	const me = $derived(meTerbaru ?? data.me);
 	let panel = $state(false);
+	let menuAplikasi = $state(false);
 	let menuProfil = $state(false);
 	let bungkusProfil = $state<HTMLDivElement | null>(null);
 	let notifs = $state<
 		{ id: string; judul: string; isi: string; tautan: string | null; dibaca: boolean; createdAt: string }[]
 	>([]);
-
-	const tautan = [
-		{ href: "/app", label: "Beranda", tepat: true },
-		{ href: "/app/catatan", label: "Catatan" },
-		{ href: "/app/skp", label: "SKP" },
-		{ href: "/app/jke", label: "JKE" },
-		{ href: "/app/validasi", label: "Validasi" },
-	];
 
 	onMount(() => {
 		function klikLuar(e: MouseEvent) {
@@ -34,6 +24,7 @@
 			if (e.key === "Escape") {
 				menuProfil = false;
 				panel = false;
+				menuAplikasi = false;
 			}
 		}
 		document.addEventListener("click", klikLuar);
@@ -48,6 +39,7 @@
 	afterNavigate(() => {
 		menuProfil = false;
 		panel = false;
+		menuAplikasi = false;
 	});
 
 	function aktif(href: string, tepat = false) {
@@ -64,14 +56,14 @@
 	async function bukaProfil() {
 		panel = false;
 		menuProfil = !menuProfil;
-		if (menuProfil) me = await api<Me>("/me");
+		if (menuProfil) meTerbaru = await api<Me>("/me");
 	}
 
 	async function baca(n: (typeof notifs)[0]) {
 		await api(`/notifikasi/${n.id}/baca`, { method: "POST" });
 		if (n.tautan) await goto(n.tautan);
 		panel = false;
-		me = await api<Me>("/me");
+		meTerbaru = await api<Me>("/me");
 	}
 
 	async function keluar() {
@@ -91,24 +83,39 @@
 				class="mx-auto flex max-w-[1120px] flex-wrap items-center gap-x-3 gap-y-1 px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 sm:flex-nowrap sm:gap-x-4 sm:py-3 sm:pt-[max(0.75rem,env(safe-area-inset-top))]"
 			>
 				<img src="/logo-kemenkes.png" alt="Kemenkes" class="h-7 w-auto shrink-0 sm:h-8" />
-				<nav
-					class="nav-geser order-last flex w-full min-w-0 flex-nowrap gap-1 text-sm sm:order-none sm:w-auto sm:flex-1 sm:gap-3"
-				>
-					{#each tautan as t}
-						<a
-							class="inline-flex shrink-0 items-center px-2 py-2 hover:text-accent sm:px-0 sm:py-0"
-							class:text-accent={aktif(t.href, t.tepat)}
-							class:font-medium={aktif(t.href, t.tepat)}
-							href={t.href}>{t.label}</a
-						>
-					{/each}
+				<nav class="hidden min-w-0 flex-1 items-start justify-center gap-5 lg:flex">
+					<div>
+						<p class="text-[10px] font-medium uppercase tracking-wide text-muted">Pekerjaan saya</p>
+						<div class="mt-0.5 flex gap-3 text-xs">
+							<a class:text-accent={aktif("/app", true)} class:font-medium={aktif("/app", true)} href="/app">Beranda</a>
+							<a class:text-accent={aktif("/app/catatan")} class:font-medium={aktif("/app/catatan")} href="/app/catatan">Catatan harian</a>
+							<a class:text-accent={aktif("/app/skp")} class:font-medium={aktif("/app/skp")} href="/app/skp">SKP</a>
+						</div>
+					</div>
+					<div>
+						<p class="text-[10px] font-medium uppercase tracking-wide text-muted">Pemantauan</p>
+						<div class="mt-0.5 flex gap-3 text-xs">
+							<a class:text-accent={aktif("/app/jke")} class:font-medium={aktif("/app/jke")} href="/app/jke">Rekap jam</a>
+							{#if me.dapatMemvalidasi}
+								<a class="relative" class:text-accent={aktif("/app/validasi")} class:font-medium={aktif("/app/validasi")} href="/app/validasi">
+									Validasi
+									{#if me.menungguValidasi > 0}<span class="ml-0.5 bg-brand px-1 font-mono text-[9px] text-white">{me.menungguValidasi}</span>{/if}
+								</a>
+							{/if}
+							<a class:text-accent={aktif("/app/laporan")} class:font-medium={aktif("/app/laporan")} href="/app/laporan">Laporan</a>
+						</div>
+					</div>
 					{#if me.user.isAdmin || me.user.isKepalaBiro}
-						<a
-							class="inline-flex shrink-0 items-center px-2 py-2 hover:text-accent sm:px-0 sm:py-0"
-							class:text-accent={aktif("/app/master")}
-							class:font-medium={aktif("/app/master")}
-							href="/app/master">Master</a
-						>
+						<div>
+							<p class="text-[10px] font-medium uppercase tracking-wide text-muted">Administrasi</p>
+							<div class="mt-0.5 flex gap-3 text-xs">
+								<a class:text-accent={aktif("/app/master/pegawai")} class:font-medium={aktif("/app/master/pegawai")} href="/app/master/pegawai">Pegawai & organisasi</a>
+								<a class:text-accent={aktif("/app/master/produk")} class:font-medium={aktif("/app/master/produk")} href="/app/master/produk">Katalog kinerja</a>
+								{#if me.dapatMengelolaPengguna}
+									<a class:text-accent={aktif("/app/administrasi/pengguna")} class:font-medium={aktif("/app/administrasi/pengguna")} href="/app/administrasi/pengguna">Pengguna</a>
+								{/if}
+							</div>
+						</div>
 					{/if}
 				</nav>
 				<div class="relative z-20 ml-auto flex shrink-0 items-center gap-1 sm:ml-0 sm:gap-2">
@@ -217,7 +224,7 @@
 						onclick={async () => {
 							await api("/notifikasi/baca-semua", { method: "POST" });
 							notifs = await api("/notifikasi");
-							me = await api<Me>("/me");
+							meTerbaru = await api<Me>("/me");
 						}}>Tandai semua dibaca</button
 					>
 				</div>
@@ -239,11 +246,41 @@
 			</aside>
 		{/if}
 
+		{#if menuAplikasi}
+			<button class="fixed inset-0 z-20 bg-[rgb(20_48_51/0.28)] lg:hidden" type="button" aria-label="Tutup menu" onclick={() => (menuAplikasi = false)}></button>
+			<aside class="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 max-h-[70dvh] overflow-y-auto border-t border-border-strong bg-surface p-5 lg:hidden">
+				<p class="text-xs font-medium uppercase tracking-wide text-muted">Pemantauan</p>
+				<nav class="mt-2 grid gap-2 text-sm">
+					<a class="py-2" href="/app/jke">Rekap jam efektif</a>
+					{#if me.dapatMemvalidasi}<a class="flex items-center justify-between py-2" href="/app/validasi"><span>Validasi catatan</span>{#if me.menungguValidasi > 0}<span class="bg-brand px-2 py-0.5 font-mono text-xs text-white">{me.menungguValidasi}</span>{/if}</a>{/if}
+					<a class="py-2" href="/app/laporan">Laporan kinerja</a>
+				</nav>
+				{#if me.user.isAdmin || me.user.isKepalaBiro}
+					<p class="mt-5 text-xs font-medium uppercase tracking-wide text-muted">Administrasi</p>
+					<nav class="mt-2 grid gap-2 text-sm">
+						<a class="py-2" href="/app/master/pegawai">Pegawai & organisasi</a>
+						<a class="py-2" href="/app/master/produk">Katalog kinerja</a>
+						{#if me.dapatMengelolaPengguna}<a class="py-2" href="/app/administrasi/pengguna">Manajemen pengguna</a>{/if}
+					</nav>
+				{/if}
+			</aside>
+		{/if}
+
 		<main
-			class="mx-auto max-w-[1120px] px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+			class="mx-auto max-w-[1120px] px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] py-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-[max(1.5rem,env(safe-area-inset-bottom))]"
 		>
 			{@render children()}
 		</main>
+
+		<nav class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-border-strong bg-surface pb-[env(safe-area-inset-bottom)] text-xs lg:hidden">
+			<a class="flex min-h-16 items-center justify-center px-2 text-center" class:text-accent={aktif("/app", true)} class:font-medium={aktif("/app", true)} href="/app">Beranda</a>
+			<a class="flex min-h-16 items-center justify-center px-2 text-center" class:text-accent={aktif("/app/catatan")} class:font-medium={aktif("/app/catatan")} href="/app/catatan">Catatan</a>
+			<a class="flex min-h-16 items-center justify-center px-2 text-center" class:text-accent={aktif("/app/skp")} class:font-medium={aktif("/app/skp")} href="/app/skp">SKP</a>
+			<button class="relative min-h-16 px-2 text-center" class:text-accent={menuAplikasi} type="button" onclick={() => (menuAplikasi = !menuAplikasi)}>
+				Menu
+				{#if me.menungguValidasi > 0}<span class="absolute right-[calc(50%-1.5rem)] top-3 h-2 w-2 bg-brand"></span>{/if}
+			</button>
+		</nav>
 	</div>
 {:else}
 	<p class="p-8 text-sm text-muted">Membuka logbook...</p>

@@ -3,6 +3,8 @@
 	import { page } from "$app/state";
 	import { api } from "$lib/api";
 	import { labelStatus, menitKeJam } from "$lib/format";
+	import PageHeader from "$lib/PageHeader.svelte";
+	import TimeSummary from "$lib/TimeSummary.svelte";
 	import SelectCari, { type OpsiCari } from "$lib/SelectCari.svelte";
 
 	type Baris = {
@@ -47,6 +49,9 @@
 	const tampil = $derived(baris.slice((halaman - 1) * perHalaman, halaman * perHalaman));
 	const dariBaris = $derived(baris.length === 0 ? 0 : (halaman - 1) * perHalaman + 1);
 	const sampaiBaris = $derived(Math.min(halaman * perHalaman, baris.length));
+	const adaNilai = $derived(semua.some((b) => b.menit > 0 || b.menitTercatat > 0));
+	const totalTerverifikasi = $derived(baris.reduce((jumlah, b) => jumlah + b.menit, 0));
+	const totalTercatat = $derived(baris.reduce((jumlah, b) => jumlah + b.menitTercatat, 0));
 
 	async function muat() {
 		halaman = 1;
@@ -80,7 +85,10 @@
 	});
 </script>
 
-<h1 class="text-xl font-semibold">Jam kerja efektif</h1>
+<PageHeader
+	judul="Rekap jam efektif"
+	deskripsi="Pantau waktu terverifikasi sebagai hasil utama dan waktu tercatat yang masih dapat menunggu validasi."
+/>
 
 <div class="mt-4 flex flex-wrap items-start gap-3 text-sm">
 	<select class="min-h-11 rounded-md border border-border px-3 py-2" bind:value={periode} onchange={muat}>
@@ -111,6 +119,12 @@
 </div>
 
 {#if data}
+	<p class="mt-5 text-sm font-medium">Periode {data.dari} sampai {data.sampai}</p>
+	<div class="mt-3 max-w-2xl">
+		<TimeSummary tercatat={totalTercatat} terverifikasi={totalTerverifikasi} />
+		<p class="mt-2 text-xs text-muted">Total untuk {baris.length} pegawai pada hasil yang sedang ditampilkan.</p>
+	</div>
+
 	<section class="mt-6 grid grid-cols-3 border border-border-strong">
 		<div class="border border-border p-3 sm:p-6">
 			<p class="font-mono text-xl font-bold text-brand sm:text-3xl">{menitKeJam(data.stat.rataMenit)}</p>
@@ -128,25 +142,30 @@
 	<p class="mt-2 text-xs text-muted">Hanya catatan yang sudah disetujui.</p>
 
 	<p class="mt-6 text-xs text-muted">
-		Diurutkan dari jam tercatat tertinggi. Angka resmi hanya dari catatan yang sudah disetujui.
+		{#if adaNilai}
+			Urutan mengikuti data rekap. Waktu terverifikasi hanya berasal dari catatan yang sudah disetujui.
+		{:else}
+			Belum ada waktu tercatat atau terverifikasi; urutan peringkat tidak ditampilkan.
+		{/if}
 	</p>
 	<div class="tabel-geser mt-2">
 	<table class="w-full min-w-[48rem] text-sm">
 		<thead>
 			<tr class="text-left text-xs font-medium uppercase tracking-wide text-muted">
-				<th class="border-b border-border-strong px-3 py-2">#</th>
+				{#if adaNilai}<th class="border-b border-border-strong px-3 py-2">#</th>{/if}
 				<th class="border-b border-border-strong px-3 py-2">Nama</th>
 				<th class="border-b border-border-strong px-3 py-2">Jabatan</th>
 				<th class="border-b border-border-strong px-3 py-2">Tim</th>
-				<th class="border-b border-border-strong px-3 py-2">Jam efektif</th>
-				<th class="border-b border-border-strong px-3 py-2">%</th>
+				<th class="border-b border-border-strong px-3 py-2">Waktu terverifikasi</th>
+				<th class="border-b border-border-strong px-3 py-2">Waktu tercatat</th>
+				<th class="border-b border-border-strong px-3 py-2">% terverifikasi</th>
 				<th class="border-b border-border-strong px-3 py-2">Status</th>
 			</tr>
 		</thead>
 		<tbody>
 			{#each tampil as b, i}
 				<tr class={i % 2 === 1 ? "bg-surface-alt" : ""}>
-					<td class="border-b border-border px-3 py-3 font-mono">{b.peringkat}</td>
+					{#if adaNilai}<td class="border-b border-border px-3 py-3 font-mono">{b.peringkat}</td>{/if}
 					<td class="border-b border-border px-3 py-3">
 						<div>{b.namaLengkap}</div>
 						<div class="font-mono text-xs text-muted">NIP {b.nip}</div>
@@ -154,17 +173,15 @@
 					<td class="border-b border-border px-3 py-3">{b.jabatan}</td>
 					<td class="border-b border-border px-3 py-3">{b.tim}</td>
 					<td class="border-b border-border px-3 py-3 font-mono">
-						<div>{menitKeJam(b.menitTercatat)}</div>
-						{#if b.menitTercatat !== b.menit}
-							<div class="text-xs text-muted">Resmi {menitKeJam(b.menit)}</div>
-						{/if}
+						{menitKeJam(b.menit)}
 					</td>
-					<td class="border-b border-border px-3 py-3 font-mono">{b.persenTercatat}</td>
-					<td class="border-b border-border px-3 py-3">{labelStatus(b.statusTercatat)}</td>
+					<td class="border-b border-border px-3 py-3 font-mono">{menitKeJam(b.menitTercatat)}</td>
+					<td class="border-b border-border px-3 py-3 font-mono">{b.persen}</td>
+					<td class="border-b border-border px-3 py-3">{labelStatus(b.status)}</td>
 				</tr>
 			{:else}
 				<tr>
-					<td class="px-3 py-6 text-sm text-muted" colspan="7">
+					<td class="px-3 py-6 text-sm text-muted" colspan={adaNilai ? 8 : 7}>
 						{#if pegawaiId}
 							Pegawai ini tidak ada di filter periode atau kelompok ini.
 						{:else}
