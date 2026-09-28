@@ -1,3 +1,3 @@
-export { db, openSqlite, type DatabaseClient } from "./client";
+export { db, openSqlite } from "./client";
 export * from "./schema";
 export { hashPassword, verifyPassword } from "./password";

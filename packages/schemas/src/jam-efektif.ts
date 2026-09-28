@@ -1,9 +1,4 @@
-import {
-	JAM_KANTOR_MENIT,
-	type JenisTugas,
-	type StatusCatatan,
-	TARGET_MENIT_EFEKTIF,
-} from "./enums";
+import { type JenisTugas, type StatusCatatan, TARGET_MENIT_EFEKTIF } from "./enums";
 
 /** Selisih jam mulai–selesai, dibulatkan ke menit. */
 export function durasiKalenderMenit(mulaiIso: string, selesaiIso: string): number {
@@ -107,4 +102,4 @@ export function adaOverlap(
 	return a0 < b1 && b0 < a1;
 }
 
-export { JAM_KANTOR_MENIT, TARGET_MENIT_EFEKTIF };
+export { TARGET_MENIT_EFEKTIF };

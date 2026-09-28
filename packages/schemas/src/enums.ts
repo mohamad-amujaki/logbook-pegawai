@@ -7,7 +7,6 @@ export const STATUS_CATATAN = ["DRAFT", "SUBMIT", "TERVERIFIKASI", "DITOLAK"] as
 export type StatusCatatan = (typeof STATUS_CATATAN)[number];
 
 export const KATEGORI_CATATAN = ["BIASA", "PERLU_DISKUSI"] as const;
-export type KategoriCatatan = (typeof KATEGORI_CATATAN)[number];
 
 export const ASPEK_IKI = ["KUANTITAS", "KUALITAS", "WAKTU", "BIAYA"] as const;
 export type AspekIki = (typeof ASPEK_IKI)[number];
@@ -16,4 +15,3 @@ export const JENIS_IKI = ["CORE", "BEYOND"] as const;
 export type JenisIki = (typeof JENIS_IKI)[number];
 
 export const TARGET_MENIT_EFEKTIF = 390;
-export const JAM_KANTOR_MENIT = 450;

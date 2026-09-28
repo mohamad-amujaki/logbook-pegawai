@@ -14,4 +14,3 @@ export function openSqlite(path = file) {
 }
 
 export const db = openSqlite();
-export type DatabaseClient = ReturnType<typeof openSqlite>;

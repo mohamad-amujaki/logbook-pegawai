@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
 import { getCookie } from "hono/cookie";
 
-export type Authed = {
+type Authed = {
 	id: string;
 	nip: string;
 	namaLengkap: string;

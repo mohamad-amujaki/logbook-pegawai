@@ -43,8 +43,6 @@ export const catatanSchema = z.object({
 		.optional()
 		.or(z.literal("")),
 	buktiJudul: z.string().optional(),
-	ikiId: z.string().optional(),
-	rencanaAksiId: z.string().optional(),
 });
 
 export const validasiSchema = z.object({
@@ -196,8 +194,3 @@ export const uraianSkpSchema = z.object({
 });
 
 export const ikiUbahSchema = ikiSchema.omit({ rhkId: true });
-
-export type LoginInput = z.infer<typeof loginSchema>;
-export type CatatanInput = z.infer<typeof catatanSchema>;
-export type ValidasiInput = z.infer<typeof validasiSchema>;
-export type ValidasiMassalInput = z.infer<typeof validasiMassalSchema>;
