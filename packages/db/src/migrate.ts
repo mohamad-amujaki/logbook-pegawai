@@ -213,12 +213,16 @@ if (!kolomAksi.some((k) => k.name === "akumulasi")) {
 	sqlite.exec("ALTER TABLE rencana_aksi ADD COLUMN akumulasi INTEGER NOT NULL DEFAULT 0");
 }
 
-const kolomCatatan = sqlite.prepare("PRAGMA table_info(catatan_harian)").all() as { name: string }[];
+const kolomCatatan = sqlite.prepare("PRAGMA table_info(catatan_harian)").all() as {
+	name: string;
+}[];
 if (!kolomCatatan.some((k) => k.name === "iki_id")) {
 	sqlite.exec("ALTER TABLE catatan_harian ADD COLUMN iki_id TEXT REFERENCES iki(id)");
 }
 if (!kolomCatatan.some((k) => k.name === "rencana_aksi_id")) {
-	sqlite.exec("ALTER TABLE catatan_harian ADD COLUMN rencana_aksi_id TEXT REFERENCES rencana_aksi(id)");
+	sqlite.exec(
+		"ALTER TABLE catatan_harian ADD COLUMN rencana_aksi_id TEXT REFERENCES rencana_aksi(id)",
+	);
 }
 
 const kolomUnit = sqlite.prepare("PRAGMA table_info(unit_kerja)").all() as { name: string }[];
