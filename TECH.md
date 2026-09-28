@@ -2,10 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| **Versi** | 1.0 |
-| **Status** | Terkunci hasil wawancara, 27 September 2026 |
-| **PRD** | [PRD.md](./PRD.md) |
-| **DESIGN** | [DESIGN.md](./DESIGN.md) |
+| **Versi** | 1.1 |
+| **Status** | Terkunci hasil wawancara + realisasi prototype, 27 September 2026 |
+| **PRD** | [PRD.md](./PRD.md) v1.2 |
+| **DESIGN** | [DESIGN.md](./DESIGN.md) v2.1 |
+| **Realisasi** | §Status implementasi (realisasi) + PRD §25 |
 
 ---
 
@@ -28,7 +29,26 @@
 | Git hooks | Husky | `biome check` di pre-commit |
 | Tes | Vitest | Unit + tes schema/aturan jam efektif |
 | Auth prototype | NIP + kata sandi awal | Bukan SSO |
-| Notifikasi | Tabel D1 + endpoint Hono; polling ringan di web | Bukan email, bukan push |
+| Notifikasi | Tabel di DB + endpoint Hono; panel dimuat saat ikon lonceng dibuka | Belum polling, bukan email, bukan push |
+
+---
+
+## Status implementasi (realisasi)
+
+Kondisi kode per 27 September 2026 (rincian lengkap di [PRD.md](./PRD.md) §25):
+
+| Lapisan | Realisasi |
+|---|---|
+| Runtime / package | Bun 1.4 (Bun workspaces) |
+| Web | SvelteKit 2 · Svelte 5 (runes `$state`/`$props`/`$derived`) · Vite 7 · Tailwind CSS 4 (`@tailwindcss/vite`) |
+| API | Hono 4 · `@hono/zod-validator` · `basePath /api` · cookie sesi httpOnly |
+| DB | Drizzle ORM 0.44 · `bun:sqlite` (dev, `local.db`) · target Cloudflare D1 |
+| Validasi | Zod 3 di `packages/schemas`, dipakai bersama UI dan API |
+| Auth | PBKDF2-SHA256 100.000 iterasi + salt 16 byte (Web Crypto); tabel `sesi` + cookie `logbook_sesi`, httpOnly, SameSite=Lax, 7 hari |
+| Lint/format | Biome **2.5.14** (dipin di `devDependencies` root); `bun run check` hijau |
+| Tes | Vitest di `packages/schemas` (aturan jam efektif) |
+
+Belum terpasang (lihat PRD §25.9): impor/ekspor Excel, audit trail, soft-delete, delegasi/SLA validasi, kurasi usulan katalog, konfigurasi jam kerja/kalender libur.
 
 ---
 
@@ -42,10 +62,10 @@
 | **wrangler** | Migrasi D1, secret, deploy. |
 | **drizzle-kit** | Generate/apply migration ke SQLite lokal dan D1. |
 | **Bun workspaces** | `apps/web`, `apps/api`, `packages/db`, `packages/schemas`. |
-| **Hash sandi yang aman di Workers** | `bcrypt` berat/tidak cocok di Cloudflare. Pakai Web Crypto PBKDF2 atau library yang didukung Workers (mis. Oslo / `@noble/hashes`). |
-| **Sesi di D1 + cookie httpOnly** | Bisa cabut akses; JWT murni sulit di-revoke. |
-| **Zona waktu Asia/Jakarta** | SQLite simpan UTC; tampilan `WIB`. |
-| **Seed dari DUK** | Script impor `data/LAPORAN DUK Pegawai Biro OSDM.xlsx`. |
+| **Hash sandi yang aman di Workers** | `bcrypt` berat/tidak cocok di Cloudflare. **Realisasi:** Web Crypto PBKDF2-SHA256 100.000 iterasi. |
+| **Sesi di D1 + cookie httpOnly** | Bisa cabut akses; JWT murni sulit di-revoke. **Realisasi:** cookie `logbook_sesi`. |
+| **Zona waktu Asia/Jakarta** | SQLite simpan UTC; tampilan `WIB`. **Belum diterapkan konsisten.** |
+| **Seed dari DUK** | Script impor `data/LAPORAN DUK Pegawai Biro OSDM.xlsx`. **Realisasi:** `bun run db:seed` dari `data/duk-pegawai.json`. |
 
 ### Sebaiknya ada di prototype
 
@@ -78,15 +98,16 @@
 
 ---
 
-## Usulan monorepo
+## Struktur monorepo (aktual)
 
 ```
-apps/web          SvelteKit 5 + Tailwind + Vite
-apps/api          Hono (bisa di-mount di web /api, atau Worker terpisah)
-packages/db       Drizzle schema + klien SQLite/D1
-packages/schemas  Zod: catatan, SKP, auth, klasemen
-packages/config   Biome, TSConfig
+apps/web          SvelteKit + Svelte 5 + Tailwind + Vite
+apps/api          Hono (Worker terpisah, root /api)
+packages/db       Drizzle schema + klien bun:sqlite + migrasi inline
+packages/schemas  Zod: catatan, SKP, auth, validasi, jam efektif
 ```
+
+Catatan: `packages/config` pada usulan awal **tidak dibuat**; konfigurasi Biome dan TSConfig di root (`biome.json`, `tsconfig.base.json`). Migrasi tidak memakai `drizzle-kit` — DDL dijalankan langsung di `packages/db/src/migrate.ts`.
 
 API dan form memakai **schema Zod yang sama** — itu alasan monorepo, bukan banyak package kosmetik.
 
@@ -94,11 +115,12 @@ API dan form memakai **schema Zod yang sama** — itu alasan monorepo, bukan ban
 
 ## Auth prototype
 
-1. Impor DUK → pegawai.
-2. Sandi awal = NIP, di-hash, flag `wajib_ganti_sandi`.
-3. Login: NIP + sandi → sesi D1 → cookie httpOnly, `Secure`, `SameSite=Lax`.
+1. Impor DUK → pegawai (`bun run db:migrate` lalu `bun run db:seed`).
+2. Sandi awal = NIP, di-hash PBKDF2, flag `wajib_ganti_sandi`.
+3. Login: NIP + sandi → sesi DB → cookie `logbook_sesi` httpOnly, `SameSite=Lax` (tambahkan `Secure` saat produksi HTTPS).
 4. Ganti sandi di login pertama.
 5. Logout hapus sesi.
+6. Rate limit login in-memory: 10 percobaan / 15 menit per NIP.
 
 ---
 

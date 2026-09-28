@@ -3,10 +3,11 @@
 | Atribut | Isi |
 |---|---|
 | Nama produk | Logbook Kinerja Pegawai ASN Kemenkes |
-| Versi | 1.1 |
-| Status | Draft terkunci hasil wawancara product owner |
-| Tanggal | 27 September 2026 |
+| Versi | 1.2 |
+| Status | Draft terkunci hasil wawancara + realisasi prototype |
+| Tanggal | 27 September 2026 (rev. 1.2 — sinkron dengan kode) |
 | Pemilik produk | Product owner, pegawai Biro OSDM |
+| Realisasi | §25 Status implementasi prototype (kondisi kode saat ini) |
 | Sumber konsep awal | [Percakapan DeepSeek](https://chat.deepseek.com/share/v2zpxd9idx6a3kgvsz) |
 | Referensi resmi | KMK HK.01.07/MENKES/65/2026; Standar Interoperabilitas Logbook Kemenkes v1 2026.09.26 |
 | Tech | [TECH.md](./TECH.md) — Svelte 5, Bun, Hono, Zod, Drizzle, SQLite/D1, Cloudflare |
@@ -452,7 +453,9 @@ Override darurat Admin Pusat wajib beralasan dan masuk audit trail.
 
 ---
 
-## 10. Model data ringkas
+## 10. Model data ringkas (konsep)
+
+> **Realisasi:** struktur tabel yang benar-benar dibuat berbeda dari konsep di bawah — lihat §25.4. Diagram ini adalah rancangan awal dan dipertahankan sebagai acuan.
 
 ```
 unit_kerja ── tim_kerja ── anggota_tim
@@ -768,3 +771,240 @@ Satu file, satu sheet per master. Kosongkan baris jika belum ada; header jangan 
 | konfigurasi_jam | nama, target_menit_efektif (390), jam_kantor_menit (450), hari_kerja |
 | (hapus non_tusi_baku) | Non TUSI bebas diketik di form catatan; tidak perlu sheet master |
 | catatan_contoh | opsional, untuk demo: nip, tanggal, jenis, kode_produk, kode_tahapan, mulai, selesai, menit_efektif, output, satuan, kategori |
+
+---
+
+## 25. Status implementasi prototype (realisasi kode)
+
+> Ditambahkan pada rev. 1.2 (27 September 2026) untuk menyinkronkan PRD dengan prototype yang berjalan di `apps/web`, `apps/api`, `packages/schemas`, dan `packages/db`. Jika §1–§24 (konsep) bertentangan dengan §25 (realisasi), **§25 mencerminkan kondisi kode saat ini**.
+
+### 25.1 Stack yang terpasang
+
+| Lapisan | Realisasi |
+|---|---|
+| Web | SvelteKit 2 + Svelte 5 (runes `$state`/`$props`/`$derived`) + Tailwind CSS 4 (CSS-first, token di `apps/web/src/app.css`) |
+| API | Hono dengan `basePath /api`; cookie sesi httpOnly; belum ada token CSRF |
+| Validasi | Zod di `packages/schemas`, dipakai bersama API dan form |
+| DB | Drizzle ORM + `bun:sqlite` (dev, `local.db`); target Cloudflare D1 |
+| Auth | PBKDF2-SHA256 100.000 iterasi + salt 16 byte; tabel `sesi` + cookie `logbook_sesi` (7 hari, SameSite=Lax) |
+| Lint | Biome 2.5 (versi dipin di root `devDependencies`); `bun run check` hijau |
+| Tes | Vitest di `packages/schemas` (aturan jam efektif) |
+
+### 25.2 Layar yang sudah ada
+
+| Rute | Isi |
+|---|---|
+| `/` | Gerbang sesi: cek `/me` → arahkan ke `/login`, `/ganti-sandi`, atau `/app` |
+| `/login` | NIP + kata sandi; validasi klien, error per-field, status memuat, toggle tampilkan sandi |
+| `/ganti-sandi` | Ganti sandi wajib; sandi baru ≠ NIP, minimal 8 karakter |
+| `/app` | Beranda per-peran: kartu jam efektif hari ini (tercatat + resmi), tombol Catatan baru; ketua tim melihat tabel anggotanya; admin/kepala biro melihat 3 kartu unit |
+| `/app/catatan` | Tabel catatan sendiri + aksi Kirim (untuk DRAFT/DITOLAK) |
+| `/app/catatan/baru` | Form catatan: pin & sering digunakan, isi manual, tautan bukti, kategori Biasa/Perlu Diskusi |
+| `/app/skp` | Header SKP (3 relasi peran), pohon RHK pimpinan → RHK → IKI → rencana aksi, CRUD inline |
+| `/app/jke` | Klasemen jam efektif: filter harian/bulanan/rentang, kelompok unit/tim, cari pegawai, paginasi |
+| `/app/validasi` | Antrian + riwayat: setujui, tolak (alasan wajib), setujui massal, paginasi |
+| `/app/master/*` | Pegawai, Unit kerja, Tim kerja, Produk/Proses bisnis, Tahapan, Aktivitas |
+| Notifikasi | Panel samping dari ikon lonceng di header (bukan halaman penuh) |
+
+Belum ada layar: usulan katalog Biro OSDM, impor/ekspor Excel, audit trail, pengaturan jam kerja/kalender libur, ekspor laporan.
+
+### 25.3 Endpoint API
+
+```
+GET    /api/health
+POST   /api/auth/login              POST /api/auth/ganti-sandi        POST /api/auth/logout
+GET    /api/me
+GET    /api/catatan                 POST /api/catatan                 POST /api/catatan/:id/submit
+GET    /api/catatan/pintasan        POST /api/catatan/pin             DELETE /api/catatan/pin/:id
+GET    /api/validasi                POST /api/validasi                POST /api/validasi/massal
+GET    /api/klasemen
+GET    /api/notifikasi              POST /api/notifikasi/:id/baca     POST /api/notifikasi/baca-semua
+GET    /api/master/katalog
+POST/PUT/DELETE  /api/master/produk[/:id]      POST/PUT/DELETE /api/master/tahapan[/:id]
+POST/PUT/DELETE  /api/master/aktivitas[/:id]   POST /api/master/anggota-tim
+GET/POST /api/master/tim            PUT /api/master/tim/:id
+GET/POST /api/master/pegawai        PUT/DELETE /api/master/pegawai/:id
+GET/POST /api/master/unit           PUT/DELETE /api/master/unit/:id
+GET    /api/skp                     PUT /api/skp/header
+POST/PUT/DELETE  /api/skp/rhk-pimpinan[/:id]   POST/PUT/DELETE /api/skp/rhk[/:id]
+POST/PUT/DELETE  /api/skp/iki[/:id]            POST/PUT/DELETE /api/skp/rencana-aksi[/:id]
+```
+
+Semua endpoint selain `/api/health` dan `POST /api/auth/login` memerlukan sesi (`requireAuth`).
+
+### 25.4 Model data aktual
+
+16 tabel di `packages/db/src/schema.ts` (mirror DDL di `packages/db/src/migrate.ts`):
+
+```
+unit_kerja ──(induk_id, self)── unit_kerja
+     └── tim_kerja (ketua_pegawai_id ──► pegawai)
+            └── pegawai (unit_kerja_id, tim_kerja_id)
+                   ├── sesi
+                   ├── skp ── rhk_pimpinan ── rhk ── iki ── rencana_aksi
+                   ├── catatan_harian ── usulan_katalog
+                   ├── pin_katalog
+                   └── notifikasi
+
+produk ── tahapan ── aktivitas
+```
+
+Perbedaan penting terhadap konsep §10:
+
+- **Tidak ada** tabel `jabatan`, `pangkat_golongan`, `master_satuan`, `proses_bisnis`, `proses_bisnis_turunan`, `bukti_dukung`, `rekap_jam_kerja`, `master_jam_kerja`, `kalender_libur`, `delegasi_validasi`, `audit_log`, `anggota_tim`, `pin_favorit`, `non_tusi_baku`.
+- Katalog hanya **tiga tingkat** (produk → tahapan → aktivitas). Proses bisnis KMK hanya berupa field teks `produk.kode_proses_l1`, bukan tabel.
+- Keanggotaan tim = kolom `pegawai.tim_kerja_id` (satu tim per pegawai), bukan tabel `anggota_tim`. Ketua tim = `tim_kerja.ketua_pegawai_id`.
+- Bukti = kolom `catatan_harian.bukti_url` + `bukti_judul` (satu tautan), bukan tabel terpisah.
+- `unit_kerja` dua tingkat: Eselon I (`induk_id` NULL) dan unit kerja (punya `induk_id`).
+- `skp` punya **tiga** relasi peran: `pemberi_pertimbangan_id`, `pejabat_penilai_id`, `atasan_pejabat_penilai_id`.
+- `iki` punya `jenis` (`CORE`/`BEYOND`) dan `bobot`; `rencana_aksi` menempel ke `iki_id` dan menyimpan TW1–TW4 serta `akumulasi`.
+- `rekap_jam_kerja` tidak dimaterialisasi; klasemen dihitung saat permintaan.
+- Belum ada soft-delete: master dihapus keras dengan penjagaan (produk/tahapan/aktivitas), sedangkan hapus pegawai menghapus anak-anaknya (SKP, catatan, notifikasi, sesi).
+
+### 25.5 Aturan jam efektif yang terpasang
+
+Di `packages/schemas/src/jam-efektif.ts`, dipakai UI dan API:
+
+- `TARGET_MENIT_EFEKTIF = 390`.
+- `masukJamEfektif(jenis, status)`: NON_TUSI → false; selain itu hanya `TERVERIFIKASI`.
+- `masukJamTercatat(jenis, status)`: NON_TUSI → false; `TERVERIFIKASI` dan `SUBMIT` → true; `DRAFT`/`DITOLAK` → false. Dipakai untuk angka "jam tercatat" (termasuk yang menunggu validasi).
+- `selisihEvaluasi(durasi, menitEfektif) = max(0, durasi − menitEfektif)`.
+- `statusPemenuhan(menit)`: 0 → `NOL`; < 390 → `KURANG`; 390–467 → `TERPENUHI`; ≥ 468 (1,2× target) → `LEBIH`.
+- `persenPemenuhan(menit, target)` dibulatkan satu desimal.
+- `validasiWaktu`: durasi ≤ 0, menit efektif ≤ 0, menit efektif > durasi, dan durasi > 24 jam masing-masing memunculkan pesan galat.
+- `adaOverlap` mendeteksi tumpang tindih; catatan tetap disimpan dengan peringatan (tidak diblokir).
+- Klasemen: target = 390 × jumlah hari unik pada rentang (minimal 1), sehingga periode harian memakai target 390.
+- Beranda menampilkan **jam tercatat** sebagai angka utama dan **resmi** (terverifikasi) sebagai angka sekunder.
+
+### 25.6 Peran aktual
+
+Yang ada di kode: `isAdmin`, `isKepalaBiro`, dan peran fungsional "pemberi pertimbangan" (dari SKP tahun berjalan). **Tidak ada** peran "admin unit".
+
+- Tulis master (produk, tahapan, aktivitas, tim, pegawai, unit) → `isAdmin || isKepalaBiro`.
+- Read master (`/master/katalog`, `/master/tim`, `/master/pegawai`, `/master/unit`) → semua pengguna login (UI menu Master hanya tampil untuk admin/kepala biro).
+- Validasi → hanya pemberi pertimbangan pegawai terkait (dicek dari SKP tahun berjalan).
+- Klasemen → dibatasi ke `unit_kerja_id` pengguna; `grup=tim` membatasi ke tim pengguna kecuali admin/kepala biro.
+- SKP → hanya milik sendiri (kepemilikan dicek berjenjang sampai RHK/IKI/rencana aksi).
+
+### 25.7 Cakupan kebutuhan fungsional (§8) vs realisasi
+
+Status: **T** = terpasang, **S** = sebagian, **B** = belum.
+
+| Kode | Ringkas | Status |
+|---|---|---|
+| FR-AUTH-01 | Login NIP, sesi, logout | T |
+| FR-AUTH-02 | RBAC matriks peran | S (tanpa admin unit) |
+| FR-AUTH-03 | Isolasi data per peran | T |
+| FR-AUTH-04 | SSO Kemenkes | B |
+| FR-AUTH-05 | Reset sandi via email | B (admin reset ke NIP) |
+| FR-PG-01 | CRUD pegawai | T (tanpa field status; hapus keras) |
+| FR-PG-02 | Atasan dipilih di form SKP | T |
+| FR-PG-03 | Soft-delete / nonaktif pegawai | B |
+| FR-PG-04 | Cari & filter pegawai | S (cari + filter unit/tim; tanpa status) |
+| FR-PG-05 | Impor Excel + pratinjau | B (hanya seed DUK) |
+| FR-PG-06 | Ekspor Excel | B |
+| FR-PG-07 | Edit email/HP/foto | B |
+| FR-PG-08 | Riwayat jabatan & golongan | B |
+| FR-PG-09 | Audit trail perubahan kritis | B |
+| FR-PG-10 | Master unit kerja & jabatan | S (unit ada; jabatan teks bebas) |
+| FR-PG-11 | Master tim + keanggotaan | T (satu tim per pegawai) |
+| FR-PG-11b | Tim kerja agile | T |
+| FR-SKP-01 | Satu SKP/tahun, identitas otomatis | T |
+| FR-SKP-01b | Pegawai pilih atasan & penilai | T (+ atasan pejabat penilai) |
+| FR-SKP-02 | CRUD RHK | T |
+| FR-SKP-03 | CRUD IKI (aspek/target/satuan) | T (+ jenis CORE/BEYOND, bobot) |
+| FR-SKP-04 | Rencana aksi ≥1/IKI + TW1–TW4 | T |
+| FR-SKP-04b | Hanya kelompok A. Utama | T (tanpa konsep kelompok) |
+| FR-SKP-05 | Submit/approve/revisi/tolak SKP | B |
+| FR-SKP-06 | Kunci edit setelah disetujui | B |
+| FR-SKP-07 | Ekspor PDF/Excel SKP | B |
+| FR-SKP-08 | Master satuan | B (satuan teks bebas) |
+| FR-SKP-09 | Dashboard kelengkapan SKP | S (banner "SKP belum lengkap") |
+| FR-SKP-10 | Duplikasi SKP tahun lalu | B |
+| FR-SKP-11 | Cascading RHK dari atasan | B (RHK pimpinan diketik manual) |
+| FR-SKP-12 | Sinkron e-Kinerja | B |
+| FR-KT-01 | CRUD Produk/Tahapan/Aktivitas | T (3 tingkat; proses bisnis hanya field teks) |
+| FR-KT-02 | Aktivitas: uraian, norma waktu, status | T |
+| FR-KT-03 | Pencarian katalog + pohon admin | S (tabel + saringan; tanpa pohon) |
+| FR-KT-04 | Pin maks 10 per tipe | T |
+| FR-KT-05 | Sering digunakan Top 10 / 30 hari | T |
+| FR-KT-06 | Nonaktifkan, jangan hard-delete | S (ada status; hapus keras dengan penjagaan) |
+| FR-KT-07 | Publish per unit pemilik | B |
+| FR-KT-08 | Total norma waktu per tahapan/produk | B |
+| FR-KT-09 | Impor/ekspor katalog | B |
+| FR-KT-10 | Versioning SOP | B |
+| FR-LG-01 | Tambah catatan lengkap | T |
+| FR-LG-02 | Jenis: TUSI/TUSI Lainnya/Non TUSI | T |
+| FR-LG-03 | Pilih dari pin/pencarian | T |
+| FR-LG-04 | Isi manual + nama wajib | T |
+| FR-LG-05 | Usulan norma waktu opsional | T |
+| FR-LG-06 | Tautan ke IKI/rencana aksi | B |
+| FR-LG-06b | Kategori Biasa/Perlu Diskusi | T |
+| FR-LG-06c | Satu catatan = satu produk/tahapan | T |
+| FR-LG-07 | Waktu efektif + selisih | T |
+| FR-LG-08 | Simpan draft, submit | T |
+| FR-LG-09 | Filter daftar catatan | B |
+| FR-LG-10 | Hapus draft milik sendiri | B |
+| FR-LG-11 | Duplikasi catatan | B |
+| FR-LG-12 | Tampilan kalender | B |
+| FR-JK-01 | Akumulasi harian/mingguan/bulanan | S (harian/bulanan/rentang; tanpa mingguan) |
+| FR-JK-02 | Banding target + status | T |
+| FR-JK-03 | Kartu harian di beranda | T |
+| FR-JK-04 | Grafik mingguan/bulanan | B |
+| FR-JK-05 | Admin atur target/jam kerja | B (konstanta 390/450) |
+| FR-JK-06 | Kalender libur nasional | B |
+| FR-JK-07 | Pengecualian cuti/izin | B |
+| FR-JK-08 | Reminder jam efektif | B |
+| FR-JK-09 | Rekap atasan untuk bawahan | T (beranda ketua tim + JKE) |
+| FR-BD-01 | 0–5 tautan + jenis | S (1 tautan: URL + judul) |
+| FR-BD-02 | Edit/hapus bukti | S |
+| FR-BD-03 | Buka tautan dari form & antrian | T |
+| FR-BD-04 | Wajib bukti untuk TUSI | B |
+| FR-BD-05 | Tandai Sesuai/Tidak Sesuai | B |
+| FR-BD-06 | Unggah berkas | B |
+| FR-VL-01 | Antrian + terlambat SLA + riwayat | S (antrian/riwayat; tanpa SLA) |
+| FR-VL-02 | Setujui/tolak, komentar wajib saat tolak | T |
+| FR-VL-03 | Lihat uraian/waktu/output/bukti | T (tanpa tautan SKP) |
+| FR-VL-04 | Delegasi validasi | B |
+| FR-VL-05 | Bulk approve | T |
+| FR-VL-06 | Atasan menyesuaikan menit efektif | B |
+| FR-VL-07 | Reminder SLA + notifikasi hasil | S (notifikasi hasil ada) |
+| FR-US-01 | Setiap isi manual membuat usulan | T (data tersimpan) |
+| FR-US-02 | Grouping kemiripan usulan | B |
+| FR-US-03 | Setujui/tolak usulan | B (belum ada endpoint/UI) |
+| FR-US-04 | Notifikasi hasil usulan | B |
+| FR-DB-01 | Beranda ASN | T |
+| FR-DB-02 | Klasemen + filter harian/bulanan/rentang | T |
+| FR-DB-02b | Antrian + selisih durasi vs efektif | T |
+| FR-DB-02c | Agregat unit untuk Kepala Biro & Admin | T |
+| FR-DB-02d | Klasemen per unit & per tim | T |
+| FR-DB-03 | Beranda OSDM (usulan, kelengkapan) | B |
+| FR-LP-01 | Ekspor catatan/rekap/SKP | B |
+| FR-NT-01 | Pusat notifikasi in-app | T (panel samping) |
+| FR-NT-02 | Pemicu notifikasi | S (submit→atasan, hasil validasi→ASN; usulan tidak) |
+| FR-NT-03 | Tandai dibaca + buka tautan | T |
+| FR-NT-04 | Reminder + email | B |
+| FR-AU-01 | Audit trail | B |
+
+### 25.8 Deviasi terhadap konsep §1–§24
+
+1. **Hierarki katalog diringkas** dari lima tingkat menjadi tiga tabel; proses bisnis tersimpan sebagai kode teks.
+2. **SKP memakai tiga peran atasan** (menambah "atasan pejabat penilai"); diri sendiri tidak boleh dipilih, dan atasan pejabat penilai ≠ pejabat penilai.
+3. **IKI bukan lagi satu per RHK**: RHK punya banyak IKI; rencana aksi menempel ke IKI.
+4. **Bukti satu tautan** per catatan (bukan 0–5 tautan + jenis + penandaan atasan).
+5. **Validasi tanpa delegasi/SLA**; hanya setujui/tolak + setujui massal. Tidak ada "revisi" terpisah dari "tolak".
+6. **Klasemen menambah konsep "jam tercatat"** (termasuk catatan menunggu validasi) di samping "jam resmi".
+7. **Login memakai rate limit in-memory** 10 percobaan/15 menit per NIP; belum ada token CSRF.
+8. **Hapus master bersifat keras** dengan penjagaan ketergantungan; hapus pegawai menghapus data turunannya.
+9. **Unit kerja dua tingkat** (Eselon I + unit), bukan master jabatan/pangkat terpisah.
+
+### 25.9 Belum terpasang (usulan prioritas lanjutan)
+
+1. Usulan katalog OSDM (daftar, grouping, setujui/tolak, notifikasi) — data sudah terkumpul di `usulan_katalog`.
+2. Impor/ekspor Excel master dan laporan (FR-PG-05/06, FR-LP-01, FR-KT-09).
+3. Audit trail (FR-AU-01), soft-delete/nonaktif pegawai (FR-PG-03).
+4. Delegasi validasi + SLA + reminder (FR-VL-04, FR-VL-07, FR-NT-04).
+5. Filter daftar catatan, edit/hapus draft, tampilan kalender (FR-LG-09/10/12).
+6. Tautan catatan ke IKI/rencana aksi SKP (FR-LG-06).
+7. Konfigurasi target/jam kerja + kalender libur (FR-JK-05/06/07).
+8. Multi-tautan bukti + penandaan Sesuai/Tidak Sesuai (FR-BD-01/05).

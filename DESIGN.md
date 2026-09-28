@@ -2,11 +2,12 @@
 
 | Field | Value |
 |-------|-------|
-| **Versi** | 2.0 |
-| **Status** | Siap eksekusi |
-| **Tanggal** | 27 September 2026 |
-| **PRD** | [PRD.md](./PRD.md) v1.1 |
-| **Logo** | [assets/logo-kemenkes.png](./assets/logo-kemenkes.png) |
+| **Versi** | 2.1 |
+| **Status** | Kontrak visual + realisasi prototype |
+| **Tanggal** | 27 September 2026 (rev. 2.1 — sinkron dengan kode) |
+| **PRD** | [PRD.md](./PRD.md) v1.2 |
+| **Realisasi** | §11 Catatan realisasi (selisih kontrak vs kode) |
+| **Logo** | [assets/logo-kemenkes.png](./assets/logo-kemenkes.png) · aplikasi memakai `apps/web/static/logo-kemenkes.png` |
 | **Referensi visual** | Editorial / data-first (umkm.vantis.sh) — **bukan** warna terracotta atau navy generik |
 
 Dokumen ini adalah kontrak UI. Setiap screen baru dicek ke sini sebelum diterima.
@@ -169,6 +170,23 @@ Sampel piksel dari `assets/logo-kemenkes.png`:
 | Isi manual | `--color-accent-muted` | `--color-accent` |
 | Non TUSI | `--color-surface-alt` | `--color-text-muted` |
 
+### 3.4 Realisasi token di kode (`apps/web/src/app.css`)
+
+Token yang **benar-benar ada** di `@theme` (Tailwind v4) sebagian berbeda nama dari konsep §3.1:
+
+| Konsep §3.1 | Token di kode | Catatan |
+|---|---|---|
+| `--color-brand-cyan` | `--color-brand` (`#0cb5cc`) | Dipakai untuk angka stat besar; logo berupa gambar |
+| `--color-text-muted` | `--color-muted` | Nama disingkat |
+| `--color-brand-teal`, `--color-brand-lime` | — | **Tidak ada** di kode; lime tidak dipakai sama sekali |
+| `--color-text-inverse` | — | **Tidak ada** |
+| `--color-info`, `--color-info-bg` | — | **Tidak ada**; status menunggu memakai `--color-accent` |
+| `--shadow-subtle`, `--ease-out`, `--space-*` | — | **Tidak ada** sebagai token; jarak memakai utilitas Tailwind |
+
+Token yang tersedia: `bg, surface, surface-alt, text, muted, accent, accent-hover, accent-muted, brand, success, success-bg, warning, warning-bg, error, error-bg, border, border-strong, radius-sm/md/lg`.
+
+Konsekuensi: tabel badge §3.3 yang memakai `--color-info-bg` **belum bisa** dipakai apa adanya — status saat ini umumnya tampil sebagai teks berwarna (`text-accent`/`text-success`/`text-error`/`text-warning`) tanpa latar badge.
+
 ---
 
 ## 4. Typography
@@ -285,18 +303,18 @@ Lebar max 480px. Urutan: jenis tugas → produk/tahapan atau isi manual → urai
 
 ## 7. Screen inventory (prototype)
 
-| # | Screen | Prioritas | Layout |
-|---|---|---|---|
-| 1 | Login (NIP + sandi awal) | P0 | Form tengah, max 400px, logo Kemenkes, tanpa ilustrasi |
-| 2 | Beranda ASN | P0 | Kartu jam efektif hari ini + daftar catatan singkat |
-| 3 | Form catatan harian | P0 | Satu kolom, mobile-first |
-| 4 | Daftar catatan | P0 | Tabel + filter |
-| 5 | Antrian validasi atasan | P0 | Tabel + setujui/tolak |
-| 6 | Klasemen unit & tim | P0 | 3 stat + tabel; filter harian/bulanan/rentang |
-| 7 | Form SKP | P1 | Identitas + pilih atasan/penilai + RHK bertingkat |
-| 8 | Master pegawai / tim / katalog | P1 | Tabel + form |
-| 9 | Usulan isi manual (OSDM) | P1 | Tabel |
-| 10 | Pusat notifikasi | P0 | Panel dari ikon nav, bukan halaman penuh |
+| # | Screen | Prioritas | Layout | Status kode |
+|---|---|---|---|---|
+| 1 | Login (NIP + sandi awal) | P0 | Form tengah, max 400px, logo Kemenkes, tanpa ilustrasi | Terpasang (`/login`) |
+| 2 | Beranda (per peran) | P0 | Kartu jam efektif hari ini + aksi Catatan baru; ketua tim: tabel anggota; admin: 3 kartu unit | Terpasang (`/app`) |
+| 3 | Form catatan harian | P0 | Satu kolom, mobile-first | Terpasang (`/app/catatan/baru`) |
+| 4 | Daftar catatan | P0 | Tabel | Terpasang (`/app/catatan`); filter belum |
+| 5 | Antrian validasi atasan | P0 | Tabel + setujui/tolak + setujui massal | Terpasang (`/app/validasi`) |
+| 6 | Klasemen / jam kerja efektif | P0 | 3 stat + tabel; filter harian/bulanan/rentang; grup unit/tim | Terpasang (`/app/jke`) |
+| 7 | Form SKP | P1 | Pilih 3 peran + pohon RHK pimpinan → RHK → IKI → rencana aksi | Terpasang (`/app/skp`) |
+| 8 | Master pegawai / unit / tim / katalog | P1 | Tabel + panel form | Terpasang (`/app/master/*`) |
+| 9 | Usulan isi manual (OSDM) | P1 | Tabel | Belum (data tersimpan di `usulan_katalog`) |
+| 10 | Pusat notifikasi | P0 | Panel dari ikon nav, bukan halaman penuh | Terpasang (panel di header) |
 
 ### Login + ganti sandi awal
 
@@ -448,4 +466,21 @@ Data tabular = tabel
 
 ---
 
-**Status:** DESIGN.md v2.0 adalah kontrak visual Logbook Kemenkes. Pakai bersama PRD.md setiap kali UI dibuat.
+## 11. Catatan realisasi (selisih kontrak vs kode)
+
+Ditambahkan pada rev. 2.1. Ringkasan selisih antara kontrak ini dan yang terpasang:
+
+1. **Token merek lime/cyan mentah tidak dipakai.** Angka stat besar memakai `--color-accent`/`--color-brand`; tidak ada mark lime 3px.
+2. **Badge status berlatar belum diterapkan menyeluruh.** Status logbook tampil sebagai teks berwarna; token `--color-info-bg` belum ada di `app.css`.
+3. **Fokus input** mengikuti default peramban; belum ada override global `border-color: accent` untuk semua field (login memakai border normal + tanda error).
+4. **Layar usulan katalog OSDM belum ada** — lihat §7 (status "Belum").
+5. **Filter daftar catatan belum ada**; tabel catatan masih polos.
+6. **Bukti catatan satu tautan** (URL + judul), belum multi-tautan seperti §6.6.
+7. Anti-pattern §2 tetap terjaga di kode: tidak ada gradient, `shadow-lg`, radius > 6px, sidebar, hero, atau emoji; `prefers-reduced-motion` ada di `app.css`.
+8. **Logo**: aplikasi memakai `apps/web/static/logo-kemenkes.png`; folder `assets/` saat ini hanya berisi artefak `.DS_Store` (file logo sumber diharapkan ditaruh di sana).
+
+Kontrak §1–§10 tetap berlaku untuk screen baru; poin di atas adalah utang visual yang ditutup bertahap.
+
+---
+
+**Status:** DESIGN.md v2.1 adalah kontrak visual Logbook Kemenkes. Pakai bersama PRD.md v1.2 dan TECH.md setiap kali UI dibuat.
