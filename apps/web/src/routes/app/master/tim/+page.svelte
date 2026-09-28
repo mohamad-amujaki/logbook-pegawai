@@ -128,13 +128,14 @@
 
 <form class="mt-6 flex w-full max-w-4xl flex-wrap gap-2 text-sm" onsubmit={tambah}>
 	<input class="w-40 rounded-md border border-border px-3 py-2 font-mono" placeholder="Kode" bind:value={kode} />
-	<input class="min-w-64 flex-1 rounded-md border border-border px-3 py-2" placeholder="Nama tim kerja" bind:value={nama} />
+	<input class="min-h-11 w-full min-w-0 flex-1 rounded-md border border-border px-3 py-2 sm:min-w-64" placeholder="Nama tim kerja" bind:value={nama} />
 	<button class="rounded-md bg-accent px-4 py-2 font-medium text-white" type="submit">Tambah tim</button>
 </form>
 {#if error && !suntingId}<p class="mt-2 text-sm text-error">{error}</p>{/if}
 {#if pesan}<p class="mt-2 text-sm text-success">{pesan}</p>{/if}
 
-<table class="mt-8 w-full text-sm">
+<div class="tabel-geser mt-8">
+<table class="w-full min-w-[40rem] text-sm">
 	<thead>
 		<tr class="text-left text-xs font-medium uppercase tracking-wide text-muted">
 			<th class="border-b border-border-strong px-3 py-2">Kode</th>
@@ -175,7 +176,7 @@
 									bind:value={ubahKode}
 								/>
 								<input
-									class="min-w-64 flex-1 rounded-md border border-border px-3 py-2"
+									class="w-full min-w-0 flex-1 rounded-md border border-border px-3 py-2 sm:min-w-64"
 									placeholder="Nama tim kerja"
 									bind:value={ubahNama}
 								/>
@@ -221,3 +222,4 @@
 		{/each}
 	</tbody>
 </table>
+</div>

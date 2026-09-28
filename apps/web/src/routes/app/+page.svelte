@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { onMount } from "svelte";
-	import { api, type Me } from "$lib/api";
 	import { labelStatus, menitKeJam } from "$lib/format";
 	import { TARGET_MENIT_EFEKTIF } from "@logbook/schemas";
+	import type { Me } from "$lib/api";
 
 	type Baris = {
 		id: string;
@@ -17,16 +16,14 @@
 		statusTercatat: string;
 	};
 
-	let me = $state<Me | null>(null);
-	let klasemen = $state<{
-		stat: { rataMenit: number; persenCapai: number; persenTertaut: number };
-		baris: Baris[];
-	} | null>(null);
-
-	onMount(async () => {
-		me = await api<Me>("/me");
-		klasemen = await api("/klasemen?periode=hari");
-	});
+	let { data } = $props();
+	let me = $derived(data.me as Me | null);
+	let klasemen = $derived(
+		data.klasemen as {
+			stat: { rataMenit: number; persenCapai: number; persenTertaut: number };
+			baris: Baris[];
+		} | null,
+	);
 
 	const saya = $derived(klasemen?.baris.find((b) => b.nip === me?.user.nip));
 	const anggotaTim = $derived.by(() => {
@@ -60,19 +57,19 @@
 	{/if}
 
 	<section class="mt-6 grid grid-cols-3 border border-border-strong">
-		<div class="border border-border p-6">
-			<p class="font-mono text-3xl font-bold text-brand">{menitKeJam(saya?.menitTercatat ?? saya?.menit ?? 0)}</p>
+		<div class="border border-border p-3 sm:p-6">
+			<p class="font-mono text-xl font-bold text-brand sm:text-3xl">{menitKeJam(saya?.menitTercatat ?? saya?.menit ?? 0)}</p>
 			<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">Jam efektif</p>
 			{#if saya && saya.menitTercatat !== saya.menit}
 				<p class="text-xs text-muted">Resmi {menitKeJam(saya.menit)}</p>
 			{/if}
 		</div>
-		<div class="border border-border p-6">
-			<p class="font-mono text-3xl font-bold text-accent">{saya?.persenTercatat ?? 0}%</p>
+		<div class="border border-border p-3 sm:p-6">
+			<p class="font-mono text-xl font-bold text-accent sm:text-3xl">{saya?.persenTercatat ?? 0}%</p>
 			<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">Vs 6,5 jam</p>
 		</div>
-		<div class="border border-border p-6">
-			<p class="font-mono text-3xl font-bold text-accent">{labelStatus(saya?.statusTercatat ?? "NOL")}</p>
+		<div class="border border-border p-3 sm:p-6">
+			<p class="font-mono text-xl font-bold text-accent sm:text-3xl">{labelStatus(saya?.statusTercatat ?? "NOL")}</p>
 			<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">Status</p>
 		</div>
 	</section>
@@ -81,8 +78,9 @@
 	</p>
 
 	<div class="mt-6">
-		<a class="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover" href="/app/catatan/baru"
-			>Catatan baru</a
+		<a
+			class="inline-flex min-h-11 items-center rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover active:scale-[0.97]"
+			href="/app/catatan/baru">Catatan baru</a
 		>
 	</div>
 
@@ -91,21 +89,22 @@
 		<p class="mt-1 text-xs text-muted">Pemenuhan jam tercatat anggota hari ini.</p>
 
 		<section class="mt-4 grid grid-cols-3 border border-border-strong">
-			<div class="border border-border p-6">
-				<p class="font-mono text-3xl font-bold text-brand">{statTim.anggota}</p>
+			<div class="border border-border p-3 sm:p-6">
+				<p class="font-mono text-xl font-bold text-brand sm:text-3xl">{statTim.anggota}</p>
 				<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">Anggota</p>
 			</div>
-			<div class="border border-border p-6">
-				<p class="font-mono text-3xl font-bold text-accent">{statTim.capai}</p>
+			<div class="border border-border p-3 sm:p-6">
+				<p class="font-mono text-xl font-bold text-accent sm:text-3xl">{statTim.capai}</p>
 				<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">≥ 6,5 jam</p>
 			</div>
-			<div class="border border-border p-6">
-				<p class="font-mono text-3xl font-bold text-accent">{statTim.menunggu}</p>
+			<div class="border border-border p-3 sm:p-6">
+				<p class="font-mono text-xl font-bold text-accent sm:text-3xl">{statTim.menunggu}</p>
 				<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">Menunggu</p>
 			</div>
 		</section>
 
-		<table class="mt-6 w-full text-sm">
+		<div class="tabel-geser mt-6">
+		<table class="w-full min-w-[36rem] text-sm">
 			<thead>
 				<tr class="text-left text-xs font-medium uppercase tracking-wide text-muted">
 					<th class="border-b border-border-strong px-3 py-2">#</th>
@@ -139,6 +138,7 @@
 				{/each}
 			</tbody>
 		</table>
+		</div>
 		<p class="mt-4 text-sm">
 			<a class="text-accent" href="/app/jke?grup=tim">Buka JKE tim</a>
 		</p>
@@ -147,16 +147,16 @@
 	{#if lihatUnit && klasemen}
 		<h2 class="mt-10 text-lg font-semibold">Unit kerja</h2>
 		<section class="mt-4 grid grid-cols-3 border border-border-strong">
-			<div class="border border-border p-6">
-				<p class="font-mono text-3xl font-bold text-brand">{menitKeJam(klasemen.stat.rataMenit)}</p>
+			<div class="border border-border p-3 sm:p-6">
+				<p class="font-mono text-xl font-bold text-brand sm:text-3xl">{menitKeJam(klasemen.stat.rataMenit)}</p>
 				<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">Rata-rata</p>
 			</div>
-			<div class="border border-border p-6">
-				<p class="font-mono text-3xl font-bold text-accent">{klasemen.stat.persenCapai}%</p>
+			<div class="border border-border p-3 sm:p-6">
+				<p class="font-mono text-xl font-bold text-accent sm:text-3xl">{klasemen.stat.persenCapai}%</p>
 				<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">≥ 6,5 jam</p>
 			</div>
-			<div class="border border-border p-6">
-				<p class="font-mono text-3xl font-bold text-accent">{klasemen.stat.persenTertaut}%</p>
+			<div class="border border-border p-3 sm:p-6">
+				<p class="font-mono text-xl font-bold text-accent sm:text-3xl">{klasemen.stat.persenTertaut}%</p>
 				<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">Link Peta Proses Bisnis</p>
 			</div>
 		</section>

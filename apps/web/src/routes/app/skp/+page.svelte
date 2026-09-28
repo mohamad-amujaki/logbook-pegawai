@@ -581,7 +581,7 @@
 		<IkonAksi jenis="tambah" label="Sasaran pimpinan" onklik={() => bukaPanelPimpinan("baru")} />
 	</div>
 
-	<div class="mt-6 overflow-x-auto">
+	<div class="tabel-geser mt-6">
 		<table class="w-full min-w-[860px] text-sm">
 			<thead>
 				<tr class="text-left text-xs font-medium uppercase tracking-wide text-muted">

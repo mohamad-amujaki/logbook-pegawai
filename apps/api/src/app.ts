@@ -1,3 +1,4 @@
+import { createD1Db, runWithDb } from "@logbook/db";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { authRoutes } from "./routes/auth";
@@ -9,16 +10,38 @@ import { notifikasiRoutes } from "./routes/notifikasi";
 import { skpRoutes } from "./routes/skp";
 import { validasiRoutes } from "./routes/validasi";
 
-const app = new Hono().basePath("/api");
+export type ApiBindings = {
+	DB?: D1Database;
+	APP_ORIGIN?: string;
+};
+
+const asalLokal = new Set(["http://localhost:5173", "http://127.0.0.1:5173"]);
+
+function asalDiizinkan(asal: string, cadangan?: string): string {
+	if (asalLokal.has(asal) || asal.endsWith(".workers.dev")) return asal;
+	if (cadangan) return cadangan;
+	return "http://localhost:5173";
+}
+
+export const app = new Hono<{ Bindings: ApiBindings }>().basePath("/api");
+
+app.use("*", async (c, next) => {
+	if (c.env?.DB) {
+		await c.env.DB.prepare("PRAGMA foreign_keys = ON").run();
+		return runWithDb(createD1Db(c.env.DB), () => next());
+	}
+	await next();
+});
 
 app.use(
 	"*",
 	cors({
-		origin: process.env.APP_ORIGIN ?? "http://localhost:5173",
+		origin: (asal, c) => asalDiizinkan(asal ?? "", c.env?.APP_ORIGIN),
 		credentials: true,
 	}),
 );
 
+app.get("/", (c) => c.json({ ok: true, layanan: "logbook-api" }));
 app.get("/health", (c) => c.json({ ok: true }));
 app.route("/auth", authRoutes);
 app.route("/me", meRoutes);
@@ -28,8 +51,3 @@ app.route("/klasemen", klasemenRoutes);
 app.route("/notifikasi", notifikasiRoutes);
 app.route("/master", masterRoutes);
 app.route("/skp", skpRoutes);
-
-const port = Number(process.env.PORT ?? 8787);
-export default { port, fetch: app.fetch };
-
-console.log(`API Logbook di http://localhost:${port}`);

@@ -20,7 +20,7 @@
 	});
 </script>
 
-<div class="fixed inset-0 z-20 flex items-start justify-center px-4 py-12">
+<div class="fixed inset-0 z-40 flex items-end justify-center sm:items-start sm:px-4 sm:py-12">
 	<button
 		type="button"
 		class="absolute inset-0 bg-[rgb(20_48_51/0.28)]"
@@ -28,7 +28,7 @@
 		onclick={ontutup}
 	></button>
 	<div
-		class="panel-fokus relative w-full max-w-xl rounded-md border border-border-strong bg-surface p-5"
+		class="panel-fokus relative max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-t-md border border-border-strong bg-surface p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:rounded-md sm:pb-5"
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="judul-panel"

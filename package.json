@@ -12,6 +12,8 @@
     "dev:web": "bun run --filter @logbook/web dev",
     "db:migrate": "bun run --filter @logbook/db migrate",
     "db:seed": "bun run --filter @logbook/db seed",
+    "db:seed:d1": "bun run --filter @logbook/db seed:d1",
+    "deploy": "bun run --filter @logbook/api deploy && bun run --filter @logbook/web deploy",
     "test": "bun run --filter @logbook/schemas test",
     "check": "biome check .",
     "format": "biome check --write .",

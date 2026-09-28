@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
+	import { page } from "$app/state";
 	import { loginSchema } from "@logbook/schemas";
 	import { ApiError, api } from "$lib/api";
 
 	let nip = $state("");
 	let sandi = $state("");
-	let error = $state("");
+	let error = $state(page.url.searchParams.get("galat") ?? "");
 	let errorNip = $state("");
 	let errorSandi = $state("");
 	let loading = $state(false);
@@ -73,16 +74,19 @@
 	}
 </script>
 
-<main class="mx-auto flex min-h-screen max-w-[400px] flex-col justify-center px-4">
+<main
+	class="mx-auto flex min-h-dvh max-w-[400px] flex-col justify-center px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] py-[max(1.5rem,env(safe-area-inset-bottom))]"
+>
 	<img src="/logo-kemenkes.png" alt="Kemenkes" class="mb-8 h-12 w-auto object-contain object-left" />
 	<h1 class="text-xl font-semibold">Masuk</h1>
 	<p class="mt-1 text-sm text-muted">Logbook Kinerja</p>
 
-	<form class="mt-8 space-y-4" onsubmit={masuk}>
+	<form class="mt-8 space-y-4" method="post" action="/api/auth/login" onsubmit={masuk}>
 		<div>
 			<label class="block text-sm" for="nip">NIP</label>
 			<input
 				id="nip"
+				name="nip"
 				class="mt-1 min-h-11 w-full rounded-md border px-3 py-2 font-mono"
 				class:border-error={errorNip}
 				class:border-border={!errorNip}
@@ -114,6 +118,7 @@
 			</div>
 			<input
 				id="sandi"
+				name="sandi"
 				class="mt-1 min-h-11 w-full rounded-md border px-3 py-2"
 				class:border-error={errorSandi}
 				class:border-border={!errorSandi}

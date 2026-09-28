@@ -2,8 +2,9 @@
   "name": "@logbook/api",
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/index.ts",
-    "start": "bun src/index.ts"
+    "dev": "bun --watch src/local.ts",
+    "start": "bun src/local.ts",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.2",
@@ -13,6 +14,8 @@
     "hono": "^4.9.6"
   },
   "devDependencies": {
-    "typescript": "^5.9.2"
+    "@cloudflare/workers-types": "^5.20260927.1",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.142.0"
   }
 }

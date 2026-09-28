@@ -3,11 +3,13 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./schema": "./src/schema.ts"
+    "./schema": "./src/schema.ts",
+    "./sqlite": "./src/client.ts"
   },
   "scripts": {
     "migrate": "bun src/migrate.ts",
-    "seed": "bun src/seed.ts"
+    "seed": "bun src/seed.ts",
+    "seed:d1": "bun src/seed-d1.ts"
   },
   "dependencies": {
     "@logbook/schemas": "workspace:*",

@@ -194,7 +194,7 @@
 	{:else}
 		<input
 			bind:this={kotak}
-			class="w-full rounded-md border px-3 py-2 text-sm"
+			class="min-h-11 w-full rounded-md border px-3 py-2 text-sm"
 			class:border-error={error}
 			class:border-border={!error}
 			placeholder={placeholder}

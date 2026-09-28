@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+@font-face {
+	font-family: "Instrument Sans";
+	src: url("/fonts/instrument-sans.woff2") format("woff2");
+	font-weight: 400 700;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "IBM Plex Mono";
+	src: url("/fonts/ibm-plex-mono.woff2") format("woff2");
+	font-weight: 400 500;
+	font-style: normal;
+	font-display: swap;
+}
+
 @theme {
 	--font-sans: "Instrument Sans", "Helvetica Neue", system-ui, sans-serif;
 	--font-mono: "IBM Plex Mono", Consolas, monospace;
@@ -29,6 +45,45 @@ html {
 	background: var(--color-bg);
 	color: var(--color-text);
 	font-family: var(--font-sans);
+	overflow-x: clip;
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+}
+
+body {
+	min-height: 100dvh;
+}
+
+button,
+[type="button"],
+[type="submit"],
+[type="reset"] {
+	touch-action: manipulation;
+}
+
+.nav-geser {
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	-webkit-overflow-scrolling: touch;
+	scrollbar-width: none;
+}
+
+.nav-geser::-webkit-scrollbar {
+	display: none;
+}
+
+.tabel-geser {
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	-webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 639px) {
+	input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+	select,
+	textarea {
+		font-size: 1rem;
+	}
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -2,21 +2,26 @@ import {
 	aktivitas,
 	catatanHarian,
 	db,
+	iki,
 	pinKatalog,
 	produk,
+	rencanaAksi,
+	rhk,
+	rhkPimpinan,
 	skp,
 	tahapan,
 	usulanKatalog,
 } from "@logbook/db";
 import {
 	adaOverlap,
+	catatanMassalSchema,
 	catatanSchema,
 	durasiKalenderMenit,
 	pinKatalogSchema,
 	validasiWaktu,
 } from "@logbook/schemas";
 import { zValidator } from "@hono/zod-validator";
-import { and, asc, desc, eq, gte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { buatId } from "../lib/id";
 import { kirimNotifikasi } from "../lib/notify";
@@ -50,6 +55,163 @@ function tanggalSejak(hari: number) {
 	const d = new Date();
 	d.setDate(d.getDate() - hari);
 	return d.toISOString().slice(0, 10);
+}
+
+async function tautanSkpSah(
+	userId: string,
+	ikiId: string,
+	aksiId: string,
+	tahun: number,
+): Promise<string | null> {
+	const aksi = (await db.select().from(rencanaAksi).where(eq(rencanaAksi.id, aksiId)).limit(1))[0];
+	if (!aksi) return "Rencana aksi tidak ditemukan.";
+	if (aksi.ikiId !== ikiId) return "Rencana aksi tidak sesuai dengan IKI yang dipilih.";
+	const barisIki = (await db.select().from(iki).where(eq(iki.id, ikiId)).limit(1))[0];
+	if (!barisIki) return "IKI tidak ditemukan.";
+	const barisRhk = (await db.select().from(rhk).where(eq(rhk.id, barisIki.rhkId)).limit(1))[0];
+	if (!barisRhk) return "IKI tidak ditemukan pada SKP Anda.";
+	const pimpinan = (
+		await db.select().from(rhkPimpinan).where(eq(rhkPimpinan.id, barisRhk.rhkPimpinanId)).limit(1)
+	)[0];
+	if (!pimpinan) return "IKI tidak ditemukan pada SKP Anda.";
+	const header = (await db.select().from(skp).where(eq(skp.id, pimpinan.skpId)).limit(1))[0];
+	if (!header || header.pegawaiId !== userId) return "IKI tidak ditemukan pada SKP Anda.";
+	if (header.tahun !== tahun) return "IKI tidak sesuai dengan tahun catatan.";
+	return null;
+}
+
+type Pengguna = { id: string; namaLengkap: string };
+
+function nilaiIsian(body: {
+	jenisTugas: "TUSI" | "TUSI_LAINNYA" | "NON_TUSI";
+	ikiId: string;
+	rencanaAksiId: string;
+	produkId?: string;
+	tahapanId?: string;
+	aktivitasId?: string;
+	isiManual: boolean;
+	namaManualProduk?: string;
+	namaManualTahapan?: string;
+	usulanNormaWaktu?: number;
+	uraian: string;
+	waktuMulai: string;
+	waktuSelesai: string;
+	menitEfektif: number;
+	jumlahOutput: number;
+	satuanOutput: string;
+	kategori: "BIASA" | "PERLU_DISKUSI";
+	buktiUrl?: string;
+	buktiJudul?: string;
+}) {
+	return {
+		jenisTugas: body.jenisTugas,
+		produkId: body.isiManual ? null : body.produkId || null,
+		tahapanId: body.isiManual ? null : body.tahapanId || null,
+		aktivitasId: body.isiManual ? null : body.aktivitasId || null,
+		ikiId: body.ikiId,
+		rencanaAksiId: body.rencanaAksiId,
+		isiManual: body.isiManual,
+		namaManualProduk: body.namaManualProduk,
+		namaManualTahapan: body.namaManualTahapan,
+		usulanNormaWaktu: body.usulanNormaWaktu,
+		uraian: body.uraian,
+		waktuMulai: body.waktuMulai,
+		waktuSelesai: body.waktuSelesai,
+		menitEfektif: body.menitEfektif,
+		jumlahOutput: Math.round(body.jumlahOutput),
+		satuanOutput: body.satuanOutput,
+		kategori: body.kategori,
+		buktiUrl: body.buktiUrl || null,
+		buktiJudul: body.buktiJudul,
+		tanggal: body.waktuMulai.slice(0, 10),
+	};
+}
+
+async function galatIsian(
+	userId: string,
+	body: Parameters<typeof nilaiIsian>[0],
+	kecualiId?: string,
+) {
+	const errors = validasiWaktu(body.waktuMulai, body.waktuSelesai, body.menitEfektif);
+	if (errors[0]) return errors[0];
+	if (body.isiManual && (!body.namaManualProduk?.trim() || !body.namaManualTahapan?.trim())) {
+		return "Isi manual wajib nama produk dan tahapan usulan.";
+	}
+	if (!body.isiManual && (!body.produkId || !body.tahapanId)) {
+		return "Pilih produk dan tahapan, atau centang isi manual.";
+	}
+	const tahun = Number(body.waktuMulai.slice(0, 4));
+	const tautan = await tautanSkpSah(userId, body.ikiId, body.rencanaAksiId, tahun);
+	if (tautan) return tautan;
+	const milik = await db.select().from(catatanHarian).where(eq(catatanHarian.pegawaiId, userId));
+	const overlap = milik.some(
+		(row) =>
+			row.id !== kecualiId &&
+			row.status !== "DITOLAK" &&
+			adaOverlap(body.waktuMulai, body.waktuSelesai, row.waktuMulai, row.waktuSelesai),
+	);
+	return {
+		overlap,
+		nilai: nilaiIsian(body),
+	};
+}
+
+async function kirimCatatan(row: typeof catatanHarian.$inferSelect) {
+	if (row.status === "TERVERIFIKASI") return "Catatan terverifikasi tidak dapat diubah.";
+	if (row.status === "SUBMIT") return "Catatan ini sudah dikirim.";
+	const now = new Date().toISOString();
+	await db
+		.update(catatanHarian)
+		.set({
+			status: "SUBMIT",
+			catatanValidasi: null,
+			divalidasiOlehId: null,
+			divalidasiPada: null,
+			updatedAt: now,
+		})
+		.where(eq(catatanHarian.id, row.id));
+	if (row.isiManual) {
+		const ada = (
+			await db
+				.select({ id: usulanKatalog.id })
+				.from(usulanKatalog)
+				.where(eq(usulanKatalog.catatanHarianId, row.id))
+				.limit(1)
+		)[0];
+		if (!ada) {
+			await db.insert(usulanKatalog).values({
+				id: buatId("usl"),
+				catatanHarianId: row.id,
+				pegawaiId: row.pegawaiId,
+				namaProduk: row.namaManualProduk ?? "",
+				namaTahapan: row.namaManualTahapan ?? "",
+				normaWaktu: row.usulanNormaWaktu,
+				status: "MENUNGGU",
+			});
+		}
+	}
+	return null;
+}
+
+async function beriTahuAtasan(user: Pengguna, jumlah: number) {
+	if (jumlah < 1) return;
+	const tahun = new Date().getFullYear();
+	const skpSaya = await db
+		.select()
+		.from(skp)
+		.where(and(eq(skp.pegawaiId, user.id), eq(skp.tahun, tahun)))
+		.limit(1);
+	const atasanId = skpSaya[0]?.pemberiPertimbanganId;
+	if (!atasanId) return;
+	await kirimNotifikasi({
+		pegawaiId: atasanId,
+		judul: "Menunggu validasi",
+		isi:
+			jumlah === 1
+				? `Catatan dari ${user.namaLengkap}`
+				: `${jumlah} catatan dari ${user.namaLengkap}`,
+		tautan: "/app/validasi",
+	});
 }
 
 export const catatanRoutes = new Hono()
@@ -261,6 +423,125 @@ export const catatanRoutes = new Hono()
 		await db.delete(pinKatalog).where(eq(pinKatalog.id, id));
 		return c.json({ ok: true });
 	})
+	.get("/:id", async (c) => {
+		const user = c.get("user");
+		const id = c.req.param("id");
+		const row = (
+			await db
+				.select()
+				.from(catatanHarian)
+				.where(and(eq(catatanHarian.id, id), eq(catatanHarian.pegawaiId, user.id)))
+				.limit(1)
+		)[0];
+		if (!row) return c.json({ error: "Catatan tidak ditemukan." }, 404);
+		return c.json(row);
+	})
+	.put(
+		"/:id",
+		zValidator("json", catatanSchema, (hasil, c) => {
+			if (!hasil.success) {
+				const first = hasil.error.issues[0];
+				const field = first?.path[0];
+				return c.json(
+					{
+						error:
+							first?.message ?? "Isian belum lengkap. Periksa uraian, waktu, dan menit efektif.",
+						field: typeof field === "string" ? field : undefined,
+					},
+					400,
+				);
+			}
+		}),
+		async (c) => {
+			const user = c.get("user");
+			const id = c.req.param("id");
+			const body = c.req.valid("json");
+			const row = (
+				await db
+					.select()
+					.from(catatanHarian)
+					.where(and(eq(catatanHarian.id, id), eq(catatanHarian.pegawaiId, user.id)))
+					.limit(1)
+			)[0];
+			if (!row) return c.json({ error: "Catatan tidak ditemukan." }, 404);
+			if (row.status === "TERVERIFIKASI") {
+				return c.json({ error: "Catatan terverifikasi tidak dapat diubah." }, 400);
+			}
+			if (row.status === "SUBMIT") {
+				return c.json({ error: "Catatan yang sudah dikirim tidak dapat diubah." }, 400);
+			}
+			const cek = await galatIsian(user.id, body, id);
+			if (typeof cek === "string") return c.json({ error: cek }, 400);
+			await db
+				.update(catatanHarian)
+				.set({ ...cek.nilai, updatedAt: new Date().toISOString() })
+				.where(eq(catatanHarian.id, id));
+			return c.json({
+				id,
+				peringatanOverlap: cek.overlap
+					? "Waktu tumpang tindih dengan catatan lain. Catatan tetap disimpan."
+					: null,
+			});
+		},
+	)
+	.post(
+		"/massal",
+		zValidator("json", catatanMassalSchema, (hasil, c) => {
+			if (!hasil.success) {
+				const first = hasil.error.issues[0];
+				return c.json({ error: first?.message ?? "Pilih paling tidak satu catatan." }, 400);
+			}
+		}),
+		async (c) => {
+			const user = c.get("user");
+			const { catatanIds } = c.req.valid("json");
+			const unik = [...new Set(catatanIds)];
+			const rows = await db
+				.select()
+				.from(catatanHarian)
+				.where(and(eq(catatanHarian.pegawaiId, user.id), inArray(catatanHarian.id, unik)));
+			if (rows.length !== unik.length) {
+				return c.json({ error: "Sebagian catatan tidak ditemukan. Muat ulang daftar." }, 400);
+			}
+			if (rows.some((r) => r.status !== "DRAFT" && r.status !== "DITOLAK")) {
+				return c.json({ error: "Hanya draf dan catatan ditolak yang dapat dikirim." }, 400);
+			}
+			const now = new Date().toISOString();
+			await db
+				.update(catatanHarian)
+				.set({
+					status: "SUBMIT",
+					catatanValidasi: null,
+					divalidasiOlehId: null,
+					divalidasiPada: null,
+					updatedAt: now,
+				})
+				.where(and(eq(catatanHarian.pegawaiId, user.id), inArray(catatanHarian.id, unik)));
+			for (const row of rows) {
+				if (!row.isiManual) continue;
+				const ada = (
+					await db
+						.select({ id: usulanKatalog.id })
+						.from(usulanKatalog)
+						.where(eq(usulanKatalog.catatanHarianId, row.id))
+						.limit(1)
+				)[0];
+				if (!ada) {
+					await db.insert(usulanKatalog).values({
+						id: buatId("usl"),
+						catatanHarianId: row.id,
+						pegawaiId: row.pegawaiId,
+						namaProduk: row.namaManualProduk ?? "",
+						namaTahapan: row.namaManualTahapan ?? "",
+						normaWaktu: row.usulanNormaWaktu,
+						status: "MENUNGGU",
+					});
+				}
+			}
+			await beriTahuAtasan(user, rows.length);
+			return c.json({ ok: true, jumlah: rows.length });
+		},
+	)
 	.post(
 		"/",
 		zValidator("json", catatanSchema, (hasil, c) => {
@@ -280,55 +561,20 @@ export const catatanRoutes = new Hono()
 		async (c) => {
 			const user = c.get("user");
 			const body = c.req.valid("json");
-			const errors = validasiWaktu(body.waktuMulai, body.waktuSelesai, body.menitEfektif);
-			if (errors[0]) return c.json({ error: errors[0] }, 400);
-
-			if (body.isiManual && (!body.namaManualProduk?.trim() || !body.namaManualTahapan?.trim())) {
-				return c.json({ error: "Isi manual wajib nama produk dan tahapan usulan." }, 400);
-			}
-			if (!body.isiManual && (!body.produkId || !body.tahapanId)) {
-				return c.json({ error: "Pilih produk dan tahapan, atau centang isi manual." }, 400);
-			}
-
-			const milik = await db
-				.select()
-				.from(catatanHarian)
-				.where(eq(catatanHarian.pegawaiId, user.id));
-			const overlap = milik.some(
-				(row) =>
-					row.status !== "DITOLAK" &&
-					adaOverlap(body.waktuMulai, body.waktuSelesai, row.waktuMulai, row.waktuSelesai),
-			);
+			const cek = await galatIsian(user.id, body);
+			if (typeof cek === "string") return c.json({ error: cek }, 400);
 
 			const id = buatId("ctt");
-			const tanggal = body.waktuMulai.slice(0, 10);
 			await db.insert(catatanHarian).values({
 				id,
 				pegawaiId: user.id,
-				tanggal,
-				jenisTugas: body.jenisTugas,
-				produkId: body.isiManual ? null : body.produkId || null,
-				tahapanId: body.isiManual ? null : body.tahapanId || null,
-				aktivitasId: body.isiManual ? null : body.aktivitasId || null,
-				isiManual: body.isiManual,
-				namaManualProduk: body.namaManualProduk,
-				namaManualTahapan: body.namaManualTahapan,
-				usulanNormaWaktu: body.usulanNormaWaktu,
-				uraian: body.uraian,
-				waktuMulai: body.waktuMulai,
-				waktuSelesai: body.waktuSelesai,
-				menitEfektif: body.menitEfektif,
-				jumlahOutput: Math.round(body.jumlahOutput),
-				satuanOutput: body.satuanOutput,
-				kategori: body.kategori,
-				buktiUrl: body.buktiUrl || null,
-				buktiJudul: body.buktiJudul,
+				...cek.nilai,
 				status: "DRAFT",
 			});
 
 			return c.json({
 				id,
-				peringatanOverlap: overlap
+				peringatanOverlap: cek.overlap
 					? "Waktu tumpang tindih dengan catatan lain. Catatan tetap disimpan."
 					: null,
 				selisihEvaluasi:
@@ -346,42 +592,8 @@ export const catatanRoutes = new Hono()
 			.limit(1);
 		const row = rows[0];
 		if (!row) return c.json({ error: "Catatan tidak ditemukan." }, 404);
-		if (row.status === "TERVERIFIKASI") {
-			return c.json({ error: "Catatan terverifikasi tidak dapat diubah." }, 400);
-		}
-
-		await db
-			.update(catatanHarian)
-			.set({ status: "SUBMIT", updatedAt: new Date().toISOString() })
-			.where(eq(catatanHarian.id, id));
-
-		if (row.isiManual) {
-			await db.insert(usulanKatalog).values({
-				id: buatId("usl"),
-				catatanHarianId: id,
-				pegawaiId: user.id,
-				namaProduk: row.namaManualProduk ?? "",
-				namaTahapan: row.namaManualTahapan ?? "",
-				normaWaktu: row.usulanNormaWaktu,
-				status: "MENUNGGU",
-			});
-		}
-
-		const tahun = new Date().getFullYear();
-		const skpSaya = await db
-			.select()
-			.from(skp)
-			.where(and(eq(skp.pegawaiId, user.id), eq(skp.tahun, tahun)))
-			.limit(1);
-		const atasanId = skpSaya[0]?.pemberiPertimbanganId;
-		if (atasanId) {
-			await kirimNotifikasi({
-				pegawaiId: atasanId,
-				judul: "Menunggu validasi",
-				isi: `Catatan dari ${user.namaLengkap}.`,
-				tautan: "/app/validasi",
-			});
-		}
-
+		const galat = await kirimCatatan(row);
+		if (galat) return c.json({ error: galat }, 400);
+		await beriTahuAtasan(user, 1);
 		return c.json({ ok: true });
 	});

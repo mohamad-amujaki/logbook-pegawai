@@ -247,7 +247,8 @@
 
 	{#if pesan}<p class="mt-4 text-sm text-success">{pesan}</p>{/if}
 
-	<table class="mt-6 w-full text-sm">
+	<div class="tabel-geser mt-6">
+	<table class="w-full min-w-[40rem] text-sm">
 		<thead>
 			<tr class="text-left text-xs font-medium uppercase tracking-wide text-muted">
 				<th class="border-b border-border-strong px-3 py-2">Kode</th>
@@ -277,7 +278,7 @@
 				<tr>
 					<td class="px-3 py-6 text-sm text-muted" colspan="5">
 						{#if kataCari || saringProduk}
-							Tidak ada tahapan yang cocok dengan saringan ini.
+							Tidak ada tahapan yang cocok dengan filter ini.
 						{:else}
 							Belum ada tahapan.
 						{/if}
@@ -286,6 +287,7 @@
 			{/each}
 		</tbody>
 	</table>
+	</div>
 
 	<div class="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
 		<div class="flex flex-wrap items-baseline gap-x-6 gap-y-2">

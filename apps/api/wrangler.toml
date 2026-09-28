@@ -1,9 +1,0 @@
-name = "logbook-api"
-main = "src/index.ts"
-compatibility_date = "2026-09-01"
-compatibility_flags = ["nodejs_compat"]
-
-[[d1_databases]]
-binding = "DB"
-database_name = "logbook"
-database_id = "ganti-saat-deploy"

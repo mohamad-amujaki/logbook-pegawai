@@ -167,6 +167,8 @@ export const catatanHarian = sqliteTable("catatan_harian", {
 	produkId: text("produk_id").references(() => produk.id),
 	tahapanId: text("tahapan_id").references(() => tahapan.id),
 	aktivitasId: text("aktivitas_id").references(() => aktivitas.id),
+	ikiId: text("iki_id").references(() => iki.id),
+	rencanaAksiId: text("rencana_aksi_id").references(() => rencanaAksi.id),
 	isiManual: integer("isi_manual", { mode: "boolean" }).notNull().default(false),
 	namaManualProduk: text("nama_manual_produk"),
 	namaManualTahapan: text("nama_manual_tahapan"),

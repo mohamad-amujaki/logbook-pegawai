@@ -171,24 +171,29 @@ export const validasiRoutes = new Hono()
 			}
 
 			const now = new Date().toISOString();
-			await db.transaction(async (tx) => {
-				await tx
-					.update(catatanHarian)
-					.set({
-						status: "TERVERIFIKASI",
-						catatanValidasi: null,
-						divalidasiOlehId: user.id,
-						divalidasiPada: now,
-						updatedAt: now,
-					})
-					.where(inArray(catatanHarian.id, unik));
-			});
+			await db
+				.update(catatanHarian)
+				.set({
+					status: "TERVERIFIKASI",
+					catatanValidasi: null,
+					divalidasiOlehId: user.id,
+					divalidasiPada: now,
+					updatedAt: now,
+				})
+				.where(and(inArray(catatanHarian.id, unik), eq(catatanHarian.status, "SUBMIT")));
 
+			const perPegawai = new Map<string, number>();
 			for (const row of rows) {
+				perPegawai.set(row.pegawaiId, (perPegawai.get(row.pegawaiId) ?? 0) + 1);
+			}
+			for (const [pegawaiId, jumlah] of perPegawai) {
 				await kirimNotifikasi({
-					pegawaiId: row.pegawaiId,
+					pegawaiId,
 					judul: "Catatan disetujui",
-					isi: `Verifikasi ${new Date().toLocaleString("id-ID")}.`,
+					isi:
+						jumlah === 1
+							? `Verifikasi ${new Date().toLocaleString("id-ID")}.`
+							: `${jumlah} catatan disetujui. ${new Date().toLocaleString("id-ID")}.`,
 					tautan: "/app/catatan",
 				});
 			}

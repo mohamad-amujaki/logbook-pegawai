@@ -505,7 +505,8 @@
 	/>
 </div>
 
-<table class="mt-6 w-full text-sm">
+<div class="tabel-geser mt-6">
+<table class="w-full min-w-[48rem] text-sm">
 	<thead>
 		<tr class="text-left text-xs font-medium uppercase tracking-wide text-muted">
 			<th class="w-10 border-b border-border-strong px-3 py-2">
@@ -563,7 +564,7 @@
 			<tr>
 				<td class="px-3 py-6 text-sm text-muted" colspan="6">
 					{#if kataCari || unitId || saring}
-						Tidak ada pegawai yang cocok dengan saringan ini.
+						Tidak ada pegawai yang cocok dengan filter ini.
 					{:else}
 						Belum ada data pegawai.
 					{/if}
@@ -572,6 +573,7 @@
 		{/each}
 	</tbody>
 </table>
+</div>
 
 {#if pilih.length > 0}
 	<form class="mt-6 space-y-3 border-t border-border pt-4 text-sm" onsubmit={pindah}>
@@ -582,7 +584,7 @@
 			{/if}
 		</p>
 		<div class="flex max-w-4xl flex-wrap items-end gap-3">
-			<div class="min-w-64 flex-1">
+			<div class="w-full min-w-0 flex-1 sm:min-w-64">
 				<SelectCari
 					label="Tim tujuan"
 					placeholder="Ketik nama atau kode tim…"

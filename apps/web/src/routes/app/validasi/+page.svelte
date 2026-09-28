@@ -114,7 +114,13 @@
 	const semuaHalamanTerpilih = $derived(
 		tab === "antrian" && tampil.length > 0 && tampil.every((b) => terpilih.includes(b.id)),
 	);
+	const sebagianHalamanTerpilih = $derived(
+		tab === "antrian" && tampil.some((b) => terpilih.includes(b.id)) && !semuaHalamanTerpilih,
+	);
 	const catatanTolak = $derived(semua.find((b) => b.id === tolakId) ?? null);
+	const adaFilter = $derived(
+		Boolean(pegawaiId) || Boolean(dari) || Boolean(sampai) || periode !== (tab === "riwayat" ? "bulan" : "semua"),
+	);
 
 	function tanggalIso(d: Date): string {
 		const y = d.getFullYear();
@@ -179,6 +185,14 @@
 		periode = next === "riwayat" ? "bulan" : "semua";
 		resetAksi();
 		pesan = "";
+	}
+
+	function hapusFilter() {
+		periode = tab === "riwayat" ? "bulan" : "semua";
+		dari = "";
+		sampai = "";
+		pegawaiId = "";
+		resetAksi();
 	}
 
 	function gantiPeriode() {
@@ -298,7 +312,7 @@
 		}
 		if (tab === "antrian" && tabBaris.length === 0) return "Tidak ada catatan menunggu.";
 		if (tab === "riwayat" && tabBaris.length === 0) return "Belum ada catatan yang ditinjau.";
-		return "Tidak ada catatan yang cocok dengan saringan.";
+		return "Tidak ada catatan yang cocok dengan filter.";
 	}
 
 	onMount(muat);
@@ -309,16 +323,16 @@
 
 {#if data}
 	<section class="mt-6 grid grid-cols-3 border border-border-strong">
-		<div class="border border-border p-6">
-			<p class="font-mono text-3xl font-bold text-brand">{stat.menunggu}</p>
+		<div class="border border-border p-3 sm:p-6">
+			<p class="font-mono text-xl font-bold text-brand sm:text-3xl">{stat.menunggu}</p>
 			<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">Menunggu</p>
 		</div>
-		<div class="border border-border p-6">
-			<p class="font-mono text-3xl font-bold text-accent">{stat.perluDiskusi}</p>
+		<div class="border border-border p-3 sm:p-6">
+			<p class="font-mono text-xl font-bold text-accent sm:text-3xl">{stat.perluDiskusi}</p>
 			<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">Perlu diskusi</p>
 		</div>
-		<div class="border border-border p-6">
-			<p class="font-mono text-3xl font-bold text-accent">{stat.ditinjau}</p>
+		<div class="border border-border p-3 sm:p-6">
+			<p class="font-mono text-xl font-bold text-accent sm:text-3xl">{stat.ditinjau}</p>
 			<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">Sudah ditinjau</p>
 		</div>
 	</section>
@@ -337,7 +351,7 @@
 	</div>
 
 	<div class="mt-4 flex flex-wrap items-start gap-3 text-sm">
-		<select class="rounded-md border border-border px-3 py-2" bind:value={periode} onchange={gantiPeriode}>
+		<select class="min-h-11 rounded-md border border-border px-3 py-2" bind:value={periode} onchange={gantiPeriode}>
 			<option value="semua">Semua</option>
 			<option value="hari">Harian</option>
 			<option value="bulan">Bulanan</option>
@@ -347,7 +361,7 @@
 			<input class="rounded-md border border-border px-3 py-2" type="date" bind:value={dari} onchange={gantiPeriode} />
 			<input class="rounded-md border border-border px-3 py-2" type="date" bind:value={sampai} onchange={gantiPeriode} />
 		{/if}
-		<div class="relative z-10 min-w-64 w-full sm:w-80">
+		<div class="relative z-10 w-full min-w-0 sm:w-80">
 			<SelectCari
 				placeholder="Cari nama atau NIP…"
 				pesanKosong="Tidak ada pegawai yang cocok."
@@ -359,6 +373,9 @@
 				onubah={pilihPegawai}
 			/>
 		</div>
+		{#if adaFilter}
+			<button class="min-h-11 text-accent" type="button" onclick={hapusFilter}>Hapus filter</button>
+		{/if}
 	</div>
 
 	{#if pesan}
@@ -392,8 +409,8 @@
 		</div>
 	{/if}
 
-	<div class="mt-6 overflow-x-auto">
-		<table class="w-full text-sm">
+	<div class="tabel-geser mt-6">
+		<table class="w-full min-w-[56rem] text-sm">
 			<thead>
 				<tr class="text-left text-xs font-medium uppercase tracking-wide text-muted">
 					{#if tab === "antrian"}
@@ -401,6 +418,9 @@
 							<input
 								type="checkbox"
 								checked={semuaHalamanTerpilih}
+								{@attach (el: HTMLInputElement) => {
+									el.indeterminate = sebagianHalamanTerpilih;
+								}}
 								disabled={tampil.length === 0 || sibuk}
 								aria-label="Pilih semua di halaman ini"
 								onchange={(e) => toggleHalaman(e.currentTarget.checked)}

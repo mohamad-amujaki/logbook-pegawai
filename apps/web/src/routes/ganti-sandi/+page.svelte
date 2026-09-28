@@ -68,16 +68,19 @@
 	}
 </script>
 
-<main class="mx-auto flex min-h-screen max-w-[400px] flex-col justify-center px-4">
+<main
+	class="mx-auto flex min-h-dvh max-w-[400px] flex-col justify-center px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] py-[max(1.5rem,env(safe-area-inset-bottom))]"
+>
 	<img src="/logo-kemenkes.png" alt="Kemenkes" class="mb-8 h-12 w-auto object-contain object-left" />
 	<h1 class="text-xl font-semibold">Ganti kata sandi</h1>
 	<p class="mt-1 text-sm text-muted">Pakai sandi baru sebelum mengisi catatan.</p>
 
-	<form class="mt-8 space-y-4" onsubmit={simpan}>
+	<form class="mt-8 space-y-4" method="post" action="/api/auth/ganti-sandi" onsubmit={simpan}>
 		<div>
 			<label class="block text-sm" for="sandi-baru">Sandi baru</label>
 			<input
 				id="sandi-baru"
+				name="sandiBaru"
 				class="mt-1 min-h-11 w-full rounded-md border px-3 py-2"
 				class:border-error={errorSandiBaru}
 				class:border-border={!errorSandiBaru}
@@ -95,6 +98,7 @@
 			<label class="block text-sm" for="ulangi-sandi">Ulangi sandi</label>
 			<input
 				id="ulangi-sandi"
+				name="ulangiSandi"
 				class="mt-1 min-h-11 w-full rounded-md border px-3 py-2"
 				class:border-error={errorUlangi}
 				class:border-border={!errorUlangi}

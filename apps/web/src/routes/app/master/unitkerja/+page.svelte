@@ -258,7 +258,8 @@
 
 {#if pesan}<p class="mt-4 text-sm text-success">{pesan}</p>{/if}
 
-<table class="mt-6 w-full text-sm">
+<div class="tabel-geser mt-6">
+<table class="w-full min-w-[36rem] text-sm">
 	<thead>
 		<tr class="text-left text-xs font-medium uppercase tracking-wide text-muted">
 			<th class="border-b border-border-strong px-3 py-2">Unit</th>
@@ -311,7 +312,7 @@
 			<tr>
 				<td class="px-3 py-6 text-sm text-muted" colspan="4">
 					{#if kata || eselonId}
-						Tidak ada unit yang cocok dengan saringan ini.
+						Tidak ada unit yang cocok dengan filter ini.
 					{:else}
 						Belum ada Eselon I. Tambah Eselon I, lalu unit kerja di bawahnya.
 					{/if}
@@ -320,6 +321,7 @@
 		{/each}
 	</tbody>
 </table>
+</div>
 
 {#if panel}
 	<PanelFokus judul={judulPanel(panel)} ontutup={tutupPanel}>

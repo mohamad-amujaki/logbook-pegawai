@@ -5,8 +5,12 @@
 	import { api, type Me, type OrangRingkas } from "$lib/api";
 	import AvatarInisial from "$lib/AvatarInisial.svelte";
 
-	let { children } = $props();
-	let me = $state<Me | null>(null);
+	let { children, data } = $props();
+	let me = $state<Me | null>(data.me);
+
+	$effect(() => {
+		me = data.me;
+	});
 	let panel = $state(false);
 	let menuProfil = $state(false);
 	let bungkusProfil = $state<HTMLDivElement | null>(null);
@@ -34,15 +38,6 @@
 		}
 		document.addEventListener("click", klikLuar);
 		document.addEventListener("keydown", padaEscape);
-
-		void (async () => {
-			try {
-				me = await api<Me>("/me");
-				if (me.user.wajibGantiSandi) await goto("/ganti-sandi");
-			} catch {
-				await goto("/login");
-			}
-		})();
 
 		return () => {
 			document.removeEventListener("click", klikLuar);
@@ -91,13 +86,17 @@
 
 {#if me}
 	<div class="min-h-screen">
-		<header class="border-b border-border-strong bg-surface">
-			<div class="mx-auto flex max-w-[1120px] items-center gap-4 px-4 py-3">
-				<img src="/logo-kemenkes.png" alt="Kemenkes" class="h-8 w-auto shrink-0" />
-				<nav class="flex min-w-0 flex-1 flex-nowrap gap-3 overflow-x-auto text-sm">
+		<header class="sticky top-0 z-30 border-b border-border-strong bg-surface">
+			<div
+				class="mx-auto flex max-w-[1120px] flex-wrap items-center gap-x-3 gap-y-1 px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 sm:flex-nowrap sm:gap-x-4 sm:py-3 sm:pt-[max(0.75rem,env(safe-area-inset-top))]"
+			>
+				<img src="/logo-kemenkes.png" alt="Kemenkes" class="h-7 w-auto shrink-0 sm:h-8" />
+				<nav
+					class="nav-geser order-last flex w-full min-w-0 flex-nowrap gap-1 text-sm sm:order-none sm:w-auto sm:flex-1 sm:gap-3"
+				>
 					{#each tautan as t}
 						<a
-							class="hover:text-accent"
+							class="inline-flex shrink-0 items-center px-2 py-2 hover:text-accent sm:px-0 sm:py-0"
 							class:text-accent={aktif(t.href, t.tepat)}
 							class:font-medium={aktif(t.href, t.tepat)}
 							href={t.href}>{t.label}</a
@@ -105,17 +104,20 @@
 					{/each}
 					{#if me.user.isAdmin || me.user.isKepalaBiro}
 						<a
-							class="hover:text-accent"
+							class="inline-flex shrink-0 items-center px-2 py-2 hover:text-accent sm:px-0 sm:py-0"
 							class:text-accent={aktif("/app/master")}
 							class:font-medium={aktif("/app/master")}
 							href="/app/master">Master</a
 						>
 					{/if}
 				</nav>
-				<div class="flex shrink-0 items-center gap-2">
+				<div class="relative z-20 ml-auto flex shrink-0 items-center gap-1 sm:ml-0 sm:gap-2">
 					<button
-						class="relative inline-flex h-8 w-8 items-center justify-center text-text hover:text-accent"
-						onclick={bukaNotif}
+						class="relative inline-flex h-11 w-11 items-center justify-center text-text hover:text-accent"
+						onclick={(e) => {
+							e.stopPropagation();
+							void bukaNotif();
+						}}
 						type="button"
 						aria-label="Notifikasi"
 						aria-expanded={panel}
@@ -134,8 +136,11 @@
 					</button>
 					<div class="relative" bind:this={bungkusProfil}>
 						<button
-							class="inline-flex items-center"
-							onclick={bukaProfil}
+							class="inline-flex h-11 w-11 items-center justify-center"
+							onclick={(e) => {
+								e.stopPropagation();
+								void bukaProfil();
+							}}
 							type="button"
 							aria-label="Profil pegawai"
 							aria-expanded={menuProfil}
@@ -145,7 +150,7 @@
 						</button>
 						{#if menuProfil}
 							<div
-								class="absolute right-0 z-20 mt-2 w-[min(20rem,calc(100vw-2rem))] border border-border-strong bg-surface p-4 shadow-[0_1px_2px_rgba(20,48,51,0.06)]"
+								class="absolute right-0 z-40 mt-2 max-h-[min(28rem,calc(100dvh-5rem))] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border border-border-strong bg-surface p-4 shadow-[0_1px_2px_rgba(20,48,51,0.06)]"
 								role="menu"
 							>
 								<p class="text-xs font-medium uppercase tracking-wide text-muted">Pegawai</p>
@@ -195,8 +200,14 @@
 		</header>
 
 		{#if panel}
+			<button
+				class="fixed inset-0 z-20 bg-[rgb(20_48_51/0.28)] sm:hidden"
+				type="button"
+				aria-label="Tutup notifikasi"
+				onclick={() => (panel = false)}
+			></button>
 			<aside
-				class="fixed right-0 top-14 z-10 h-[70vh] w-full max-w-[400px] overflow-auto border-l border-border bg-surface p-4"
+				class="fixed inset-x-0 bottom-0 z-40 max-h-[80dvh] w-full overflow-auto border-t border-border bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:inset-auto sm:right-0 sm:top-14 sm:h-[70vh] sm:max-w-[400px] sm:border-l sm:border-t-0 sm:pb-4"
 			>
 				<div class="mb-3 flex items-center justify-between">
 					<h2 class="text-lg font-semibold">Notifikasi</h2>
@@ -228,8 +239,12 @@
 			</aside>
 		{/if}
 
-		<main class="mx-auto max-w-[1120px] px-4 py-6">
+		<main
+			class="mx-auto max-w-[1120px] px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+		>
 			{@render children()}
 		</main>
 	</div>
+{:else}
+	<p class="p-8 text-sm text-muted">Membuka logbook...</p>
 {/if}

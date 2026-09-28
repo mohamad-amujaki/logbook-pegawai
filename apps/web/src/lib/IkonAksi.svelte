@@ -17,7 +17,9 @@
 </script>
 
 <button
-	class="inline-flex items-center gap-1 text-sm"
+	class="inline-flex min-h-11 items-center gap-1 text-sm"
+	class:min-w-11={hanyaIkon}
+	class:justify-center={hanyaIkon}
 	class:text-error={bahaya}
 	class:text-accent={!bahaya}
 	type="button"

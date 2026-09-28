@@ -23,6 +23,8 @@ export const gantiSandiSchema = z
 
 export const catatanSchema = z.object({
 	jenisTugas: z.enum(JENIS_TUGAS),
+	ikiId: z.string().min(1, "Pilih IKI."),
+	rencanaAksiId: z.string().min(1, "Pilih rencana aksi."),
 	produkId: z.string().optional(),
 	tahapanId: z.string().optional(),
 	aktivitasId: z.string().optional(),
@@ -54,6 +56,10 @@ export const validasiSchema = z.object({
 export const validasiMassalSchema = z.object({
 	catatanIds: z.array(z.string().min(1)).min(1, "Pilih paling tidak satu catatan."),
 	aksi: z.literal("setujui"),
+});
+
+export const catatanMassalSchema = z.object({
+	catatanIds: z.array(z.string().min(1)).min(1, "Pilih paling tidak satu catatan."),
 });
 
 export const skpHeaderSchema = z.object({

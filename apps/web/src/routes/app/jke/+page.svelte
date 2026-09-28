@@ -83,12 +83,12 @@
 <h1 class="text-xl font-semibold">Jam kerja efektif</h1>
 
 <div class="mt-4 flex flex-wrap items-start gap-3 text-sm">
-	<select class="rounded-md border border-border px-3 py-2" bind:value={periode} onchange={muat}>
+	<select class="min-h-11 rounded-md border border-border px-3 py-2" bind:value={periode} onchange={muat}>
 		<option value="hari">Harian</option>
 		<option value="bulan">Bulanan</option>
 		<option value="rentang">Rentang tanggal</option>
 	</select>
-	<select class="rounded-md border border-border px-3 py-2" bind:value={grup} onchange={muat}>
+	<select class="min-h-11 rounded-md border border-border px-3 py-2" bind:value={grup} onchange={muat}>
 		<option value="unit">Unit kerja</option>
 		<option value="tim">Tim kerja</option>
 	</select>
@@ -96,7 +96,7 @@
 		<input class="rounded-md border border-border px-3 py-2" type="date" bind:value={dari} onchange={muat} />
 		<input class="rounded-md border border-border px-3 py-2" type="date" bind:value={sampai} onchange={muat} />
 	{/if}
-	<div class="relative z-10 min-w-64 w-full sm:w-80">
+	<div class="relative z-10 w-full min-w-0 sm:w-80">
 		<SelectCari
 			placeholder="Cari nama atau NIP…"
 			pesanKosong="Tidak ada pegawai yang cocok."
@@ -112,16 +112,16 @@
 
 {#if data}
 	<section class="mt-6 grid grid-cols-3 border border-border-strong">
-		<div class="border border-border p-6">
-			<p class="font-mono text-3xl font-bold text-brand">{menitKeJam(data.stat.rataMenit)}</p>
+		<div class="border border-border p-3 sm:p-6">
+			<p class="font-mono text-xl font-bold text-brand sm:text-3xl">{menitKeJam(data.stat.rataMenit)}</p>
 			<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">Rata-rata</p>
 		</div>
-		<div class="border border-border p-6">
-			<p class="font-mono text-3xl font-bold text-accent">{data.stat.persenCapai}%</p>
+		<div class="border border-border p-3 sm:p-6">
+			<p class="font-mono text-xl font-bold text-accent sm:text-3xl">{data.stat.persenCapai}%</p>
 			<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">≥ 6,5 jam</p>
 		</div>
-		<div class="border border-border p-6">
-			<p class="font-mono text-3xl font-bold text-accent">{data.stat.persenTertaut}%</p>
+		<div class="border border-border p-3 sm:p-6">
+			<p class="font-mono text-xl font-bold text-accent sm:text-3xl">{data.stat.persenTertaut}%</p>
 			<p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">Link Peta Proses Bisnis</p>
 		</div>
 	</section>
@@ -130,7 +130,8 @@
 	<p class="mt-6 text-xs text-muted">
 		Diurutkan dari jam tercatat tertinggi. Angka resmi hanya dari catatan yang sudah disetujui.
 	</p>
-	<table class="mt-2 w-full text-sm">
+	<div class="tabel-geser mt-2">
+	<table class="w-full min-w-[48rem] text-sm">
 		<thead>
 			<tr class="text-left text-xs font-medium uppercase tracking-wide text-muted">
 				<th class="border-b border-border-strong px-3 py-2">#</th>
@@ -165,7 +166,7 @@
 				<tr>
 					<td class="px-3 py-6 text-sm text-muted" colspan="7">
 						{#if pegawaiId}
-							Pegawai ini tidak ada di saringan periode atau kelompok ini.
+							Pegawai ini tidak ada di filter periode atau kelompok ini.
 						{:else}
 							Belum ada data jam efektif untuk periode ini.
 						{/if}
@@ -174,6 +175,7 @@
 			{/each}
 		</tbody>
 	</table>
+	</div>
 
 	<div class="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
 		<div class="flex flex-wrap items-baseline gap-x-6 gap-y-2">

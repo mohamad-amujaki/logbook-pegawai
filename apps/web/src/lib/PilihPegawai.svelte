@@ -112,10 +112,10 @@
 			>
 		</div>
 	{:else}
-		<div class="flex w-full gap-2">
+		<div class="flex w-full flex-col gap-2 sm:flex-row">
 			<input
 				bind:this={kotak}
-				class="min-w-0 w-full flex-[3] rounded-md border px-3 py-2 text-sm"
+				class="min-h-11 min-w-0 w-full rounded-md border px-3 py-2 text-sm sm:flex-[3]"
 				class:border-error={error}
 				class:border-border={!error}
 				placeholder={cariPlaceholder}
@@ -124,7 +124,7 @@
 				onfocus={() => (buka = true)}
 				onkeydown={keyboard}
 			/>
-			<select class="w-48 shrink-0 rounded-md border border-border px-2 py-2 text-sm" bind:value={timId}>
+			<select class="min-h-11 w-full rounded-md border border-border px-2 py-2 text-sm sm:w-48 sm:shrink-0" bind:value={timId}>
 				<option value="">Semua tim</option>
 				{#each tim as t}
 					<option value={t.id}>{t.nama}</option>

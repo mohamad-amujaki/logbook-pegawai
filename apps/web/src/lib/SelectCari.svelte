@@ -143,7 +143,7 @@
 
 	{#if terpilih && !buka}
 		<div
-			class="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+			class="flex min-h-11 items-center justify-between gap-3 rounded-md border px-3 py-2"
 			class:border-error={error}
 			class:border-border={!error}
 		>
@@ -163,7 +163,7 @@
 	{:else}
 		<input
 			bind:this={kotak}
-			class="w-full rounded-md border px-3 py-2 text-sm"
+			class="min-h-11 w-full rounded-md border px-3 py-2 text-sm"
 			class:border-error={error}
 			class:border-border={!error}
 			placeholder={placeholder}

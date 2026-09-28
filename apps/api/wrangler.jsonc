@@ -1,0 +1,16 @@
+{
+	"name": "logbook-api",
+	"main": "src/worker.ts",
+	"compatibility_date": "2026-09-28",
+	"compatibility_flags": ["nodejs_compat"],
+	"observability": {
+		"enabled": true
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "logbook",
+			"database_id": "cba214b4-169d-4c07-aa96-794dede7d222"
+		}
+	]
+}
