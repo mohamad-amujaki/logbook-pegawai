@@ -37,6 +37,7 @@
 		satuanOutput: string;
 		catatanValidasi: string | null;
 		divalidasiPada: string | null;
+		divalidasiOtomatis: boolean;
 	};
 
 	type Data = { adaBawahan: boolean; baris: Baris[] };
@@ -502,7 +503,7 @@
 						</td>
 						{#if tab === "riwayat"}
 							<td class="border-b border-border px-3 py-3 align-top">
-								<div>{labelStatus(b.status)}</div>
+								<div>{labelStatus(b.status, b.divalidasiOtomatis)}</div>
 								{#if b.status === "DITOLAK" && b.catatanValidasi}
 									<p class="mt-1 line-clamp-2 text-xs text-muted">{b.catatanValidasi}</p>
 								{/if}

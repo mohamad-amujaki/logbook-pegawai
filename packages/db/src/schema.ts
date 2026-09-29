@@ -246,6 +246,9 @@ export const catatanHarian = sqliteTable(
 		catatanValidasi: text("catatan_validasi"),
 		divalidasiOlehId: text("divalidasi_oleh_id").references(() => pegawai.id),
 		divalidasiPada: text("divalidasi_pada"),
+		divalidasiOtomatis: integer("divalidasi_otomatis", { mode: "boolean" })
+			.notNull()
+			.default(false),
 		diajukanPada: text("diajukan_pada"),
 		unitKerjaIdSnapshot: text("unit_kerja_id_snapshot").references(() => unitKerja.id),
 		timKerjaIdSnapshot: text("tim_kerja_id_snapshot").references(() => timKerja.id),

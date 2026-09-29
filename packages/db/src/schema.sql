@@ -159,6 +159,7 @@ CREATE TABLE IF NOT EXISTS catatan_harian (
   catatan_validasi TEXT,
   divalidasi_oleh_id TEXT REFERENCES pegawai(id),
   divalidasi_pada TEXT,
+  divalidasi_otomatis INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -177,6 +178,8 @@ CREATE TABLE IF NOT EXISTS pin_katalog (
 );
 
 CREATE INDEX IF NOT EXISTS pin_katalog_pegawai ON pin_katalog(pegawai_id);
+
+CREATE INDEX IF NOT EXISTS catatan_status_diajukan_idx ON catatan_harian(status, diajukan_pada);
 
 CREATE TABLE IF NOT EXISTS usulan_katalog (
   id TEXT PRIMARY KEY,

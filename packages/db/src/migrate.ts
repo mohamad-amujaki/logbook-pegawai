@@ -276,6 +276,11 @@ if (!kolomCatatan.some((k) => k.name === "tim_kerja_id_snapshot")) {
 		"ALTER TABLE catatan_harian ADD COLUMN tim_kerja_id_snapshot TEXT REFERENCES tim_kerja(id)",
 	);
 }
+if (!kolomCatatan.some((k) => k.name === "divalidasi_otomatis")) {
+	sqlite.exec(
+		"ALTER TABLE catatan_harian ADD COLUMN divalidasi_otomatis INTEGER NOT NULL DEFAULT 0",
+	);
+}
 
 const kolomUnit = sqlite.prepare("PRAGMA table_info(unit_kerja)").all() as { name: string }[];
 if (!kolomUnit.some((k) => k.name === "induk_id")) {
@@ -342,6 +347,7 @@ CREATE INDEX IF NOT EXISTS audit_log_target_idx ON audit_log(target_akun_id, cre
 CREATE INDEX IF NOT EXISTS sesi_akun_idx ON sesi(akun_id, berakhir_pada);
 CREATE INDEX IF NOT EXISTS catatan_pegawai_tanggal_idx ON catatan_harian(pegawai_id, tanggal);
 CREATE INDEX IF NOT EXISTS catatan_status_tanggal_idx ON catatan_harian(status, tanggal);
+CREATE INDEX IF NOT EXISTS catatan_status_diajukan_idx ON catatan_harian(status, diajukan_pada);
 CREATE INDEX IF NOT EXISTS pegawai_unit_tim_idx ON pegawai(unit_kerja_id, tim_kerja_id);
 CREATE UNIQUE INDEX IF NOT EXISTS skp_pegawai_tahun_unique ON skp(pegawai_id, tahun);
 `);

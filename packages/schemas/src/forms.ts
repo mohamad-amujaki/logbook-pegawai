@@ -28,31 +28,45 @@ export const gantiSandiSchema = z
 		path: ["ulangiSandi"],
 	});
 
-export const catatanSchema = z.object({
-	jenisTugas: z.enum(JENIS_TUGAS),
-	ikiId: z.string().min(1, "Pilih IKI."),
-	rencanaAksiId: z.string().min(1, "Pilih rencana aksi."),
-	produkId: z.string().optional(),
-	tahapanId: z.string().optional(),
-	aktivitasId: z.string().optional(),
-	isiManual: z.boolean(),
-	namaManualProduk: z.string().optional(),
-	namaManualTahapan: z.string().optional(),
-	usulanNormaWaktu: z.number().int().positive().optional(),
-	uraian: z.string().trim().min(10, "Uraian minimal 10 karakter."),
-	waktuMulai: z.string().min(1, "Waktu mulai wajib diisi."),
-	waktuSelesai: z.string().min(1, "Waktu selesai wajib diisi."),
-	menitEfektif: z.number().int().positive("Waktu efektif harus lebih dari 0 menit."),
-	jumlahOutput: z.number().positive("Jumlah output harus lebih dari 0."),
-	satuanOutput: z.string().min(1, "Satuan output wajib diisi."),
-	kategori: z.enum(KATEGORI_CATATAN),
-	buktiUrl: z
-		.string()
-		.url("Tautan bukti harus berupa URL, diawali https://.")
-		.optional()
-		.or(z.literal("")),
-	buktiJudul: z.string().optional(),
-});
+export const catatanSchema = z
+	.object({
+		jenisTugas: z.enum(JENIS_TUGAS),
+		ikiId: z.string().optional(),
+		rencanaAksiId: z.string().optional(),
+		produkId: z.string().optional(),
+		tahapanId: z.string().optional(),
+		aktivitasId: z.string().optional(),
+		isiManual: z.boolean(),
+		namaManualProduk: z.string().optional(),
+		namaManualTahapan: z.string().optional(),
+		usulanNormaWaktu: z.number().int().positive().optional(),
+		uraian: z.string().trim().min(10, "Uraian minimal 10 karakter."),
+		waktuMulai: z.string().min(1, "Waktu mulai wajib diisi."),
+		waktuSelesai: z.string().min(1, "Waktu selesai wajib diisi."),
+		menitEfektif: z.number().int().positive("Waktu efektif harus lebih dari 0 menit."),
+		jumlahOutput: z.number().positive("Jumlah output harus lebih dari 0."),
+		satuanOutput: z.string().min(1, "Satuan output wajib diisi."),
+		kategori: z.enum(KATEGORI_CATATAN),
+		buktiUrl: z
+			.string()
+			.url("Tautan bukti harus berupa URL, diawali https://.")
+			.optional()
+			.or(z.literal("")),
+		buktiJudul: z.string().optional(),
+	})
+	.superRefine((v, ctx) => {
+		if (v.jenisTugas === "NON_TUSI") return;
+		if (!v.ikiId) {
+			ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Pilih IKI.", path: ["ikiId"] });
+		}
+		if (!v.rencanaAksiId) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Pilih rencana aksi.",
+				path: ["rencanaAksiId"],
+			});
+		}
+	});
 
 export const validasiSchema = z.object({
 	catatanId: z.string().min(1),

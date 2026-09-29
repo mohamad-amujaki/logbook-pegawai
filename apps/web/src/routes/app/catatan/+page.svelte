@@ -20,6 +20,7 @@
 			menitEfektif: number;
 			status: string;
 			isiManual: boolean;
+			divalidasiOtomatis: boolean;
 			produkId: string | null;
 			catatanValidasi: string | null;
 		};
@@ -424,7 +425,13 @@
 					</td>
 					<td class="border-b border-border px-3 py-3">{labelJenis(r.catatan.jenisTugas)}</td>
 					<td class="border-b border-border px-3 py-3">
-						{r.catatan.isiManual ? "Isi manual" : `${r.produkNama ?? "—"} / ${r.tahapanNama ?? "—"}`}
+						{#if r.catatan.isiManual}
+							Isi manual
+						{:else if r.produkNama || r.tahapanNama}
+							{r.produkNama ?? "—"} / {r.tahapanNama ?? "—"}
+						{:else}
+							—
+						{/if}
 					</td>
 					<td class="border-b border-border px-3 py-3">{r.catatan.uraian}</td>
 					<td class="border-b border-border px-3 py-3 font-mono">
@@ -437,7 +444,7 @@
 						{#if r.catatan.status === "DITOLAK"}
 							<button class="text-accent" type="button" onclick={() => (alasanId = r.catatan.id)}>Ditolak</button>
 						{:else}
-							{labelStatus(r.catatan.status)}
+							{labelStatus(r.catatan.status, r.catatan.divalidasiOtomatis)}
 						{/if}
 					</td>
 					<td class="border-b border-border px-3 py-3">

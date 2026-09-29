@@ -18,11 +18,13 @@ import {
 	catatanSchema,
 	durasiKalenderMenit,
 	pinKatalogSchema,
+	validasiBackdate,
 	validasiWaktu,
 } from "@logbook/schemas";
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { Hono } from "hono";
+import { rekonsiliasiAutoValidasi } from "../lib/auto-validasi";
 import { buatId } from "../lib/id";
 import { kirimNotifikasi } from "../lib/notify";
 import { requireAuth } from "../middleware/auth";
@@ -84,8 +86,8 @@ type Pengguna = { id: string; namaLengkap: string };
 
 function nilaiIsian(body: {
 	jenisTugas: "TUSI" | "TUSI_LAINNYA" | "NON_TUSI";
-	ikiId: string;
-	rencanaAksiId: string;
+	ikiId?: string;
+	rencanaAksiId?: string;
 	produkId?: string;
 	tahapanId?: string;
 	aktivitasId?: string;
@@ -103,17 +105,18 @@ function nilaiIsian(body: {
 	buktiUrl?: string;
 	buktiJudul?: string;
 }) {
+	const nonTusi = body.jenisTugas === "NON_TUSI";
 	return {
 		jenisTugas: body.jenisTugas,
-		produkId: body.isiManual ? null : body.produkId || null,
-		tahapanId: body.isiManual ? null : body.tahapanId || null,
-		aktivitasId: body.isiManual ? null : body.aktivitasId || null,
-		ikiId: body.ikiId,
-		rencanaAksiId: body.rencanaAksiId,
-		isiManual: body.isiManual,
-		namaManualProduk: body.namaManualProduk,
-		namaManualTahapan: body.namaManualTahapan,
-		usulanNormaWaktu: body.usulanNormaWaktu,
+		produkId: nonTusi || body.isiManual ? null : body.produkId || null,
+		tahapanId: nonTusi || body.isiManual ? null : body.tahapanId || null,
+		aktivitasId: nonTusi || body.isiManual ? null : body.aktivitasId || null,
+		ikiId: nonTusi ? null : body.ikiId || null,
+		rencanaAksiId: nonTusi ? null : body.rencanaAksiId || null,
+		isiManual: nonTusi ? false : body.isiManual,
+		namaManualProduk: nonTusi ? null : body.namaManualProduk,
+		namaManualTahapan: nonTusi ? null : body.namaManualTahapan,
+		usulanNormaWaktu: nonTusi ? null : body.usulanNormaWaktu,
 		uraian: body.uraian,
 		waktuMulai: body.waktuMulai,
 		waktuSelesai: body.waktuSelesai,
@@ -134,15 +137,21 @@ async function galatIsian(
 ) {
 	const errors = validasiWaktu(body.waktuMulai, body.waktuSelesai, body.menitEfektif);
 	if (errors[0]) return errors[0];
-	if (body.isiManual && (!body.namaManualProduk?.trim() || !body.namaManualTahapan?.trim())) {
-		return "Isi manual wajib nama produk dan tahapan usulan.";
+	if (!kecualiId) {
+		const backdate = validasiBackdate(body.waktuMulai);
+		if (backdate) return backdate;
 	}
-	if (!body.isiManual && (!body.produkId || !body.tahapanId)) {
-		return "Pilih produk dan tahapan, atau centang isi manual.";
+	if (body.jenisTugas !== "NON_TUSI") {
+		if (body.isiManual && (!body.namaManualProduk?.trim() || !body.namaManualTahapan?.trim())) {
+			return "Isi manual wajib nama produk dan tahapan usulan.";
+		}
+		if (!body.isiManual && (!body.produkId || !body.tahapanId)) {
+			return "Pilih produk dan tahapan, atau centang isi manual.";
+		}
+		const tahun = Number(body.waktuMulai.slice(0, 4));
+		const tautan = await tautanSkpSah(userId, body.ikiId ?? "", body.rencanaAksiId ?? "", tahun);
+		if (tautan) return tautan;
 	}
-	const tahun = Number(body.waktuMulai.slice(0, 4));
-	const tautan = await tautanSkpSah(userId, body.ikiId, body.rencanaAksiId, tahun);
-	if (tautan) return tautan;
 	const milik = await db.select().from(catatanHarian).where(eq(catatanHarian.pegawaiId, userId));
 	const overlap = milik.some(
 		(row) =>
@@ -219,6 +228,7 @@ export const catatanRoutes = new Hono()
 	.use(requireAuth)
 	.get("/", async (c) => {
 		const user = c.get("user");
+		await rekonsiliasiAutoValidasi();
 		const rows = await db
 			.select({
 				catatan: catatanHarian,
@@ -470,6 +480,10 @@ export const catatanRoutes = new Hono()
 			}
 			if (row.status === "SUBMIT") {
 				return c.json({ error: "Catatan yang sudah dikirim tidak dapat diubah." }, 400);
+			}
+			if (body.waktuMulai.slice(0, 10) !== row.tanggal) {
+				const backdate = validasiBackdate(body.waktuMulai);
+				if (backdate) return c.json({ error: backdate }, 400);
 			}
 			const cek = await galatIsian(user.id, body, id);
 			if (typeof cek === "string") return c.json({ error: cek }, 400);

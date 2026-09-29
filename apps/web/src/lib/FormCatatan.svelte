@@ -4,7 +4,7 @@
 	import { page } from "$app/state";
 	import { api, ApiError } from "$lib/api";
 	import PilihKatalog, { type OpsiKatalog } from "$lib/PilihKatalog.svelte";
-	import { validasiWaktu, type JenisIki } from "@logbook/schemas";
+	import { BATAS_HARI_BACKDATE, validasiBackdate, validasiWaktu, type JenisIki } from "@logbook/schemas";
 
 	let { id = "" }: { id?: string } = $props();
 
@@ -163,11 +163,28 @@
 			? "Pilih IKI terlebih dahulu."
 			: "IKI ini belum punya rencana aksi. Isi di SKP, atau pilih IKI lain.",
 	);
-	const simpanNonaktif = $derived(!skpSiap || daftarIki.length === 0);
+	const nonTusi = $derived(jenisTugas === "NON_TUSI");
+	const simpanNonaktif = $derived(!nonTusi && (!skpSiap || daftarIki.length === 0));
 	const durasiKalender = $derived.by(() => {
 		if (!waktuMulai || !waktuSelesai) return 0;
 		const menit = (new Date(waktuSelesai).getTime() - new Date(waktuMulai).getTime()) / 60000;
 		return menit > 0 ? Math.round(menit) : 0;
+	});
+
+	function keInputLokal(d: Date): string {
+		const p = (n: number) => String(n).padStart(2, "0");
+		return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+	}
+	const batasAwal = $derived.by(() => {
+		const d = new Date();
+		d.setHours(0, 0, 0, 0);
+		d.setDate(d.getDate() - BATAS_HARI_BACKDATE);
+		return keInputLokal(d);
+	});
+	const batasAkhir = $derived.by(() => {
+		const d = new Date();
+		d.setHours(23, 59, 0, 0);
+		return keInputLokal(d);
 	});
 
 	function nomorTw(iso: string): 1 | 2 | 3 | 4 {
@@ -360,6 +377,10 @@
 		aksiId = list.length === 1 ? (list[0]?.id ?? "") : "";
 	}
 
+	function pilihNonTusi() {
+		satuanOutput = "Kali";
+	}
+
 	function ubahProduk(id: string) {
 		if (id !== produkId) {
 			tahapanId = "";
@@ -425,23 +446,29 @@
 	}
 
 	function pesanSimpan(): string {
-		if (!ikiId) return "Pilih IKI.";
-		if (ikiTerpilih && ikiTerpilih.rencanaAksi.length === 0) {
-			return "IKI ini belum punya rencana aksi. Isi di SKP, atau pilih IKI lain.";
-		}
-		if (!aksiId) return "Pilih rencana aksi.";
-		if (isiManual) {
-			if (namaManualProduk.trim().length < 2 || namaManualTahapan.trim().length < 2) {
-				return "Isi manual wajib nama produk dan tahapan usulan.";
+		if (!nonTusi) {
+			if (!ikiId) return "Pilih IKI.";
+			if (ikiTerpilih && ikiTerpilih.rencanaAksi.length === 0) {
+				return "IKI ini belum punya rencana aksi. Isi di SKP, atau pilih IKI lain.";
 			}
-		} else if (!produkId || !tahapanId) {
-			return "Pilih produk dan tahapan, atau centang isi manual.";
+			if (!aksiId) return "Pilih rencana aksi.";
+			if (isiManual) {
+				if (namaManualProduk.trim().length < 2 || namaManualTahapan.trim().length < 2) {
+					return "Isi manual wajib nama produk dan tahapan usulan.";
+				}
+			} else if (!produkId || !tahapanId) {
+				return "Pilih produk dan tahapan, atau centang isi manual.";
+			}
 		}
 		if (uraian.trim().length < 10) return "Uraian minimal 10 karakter.";
 		if (!waktuMulai) return "Waktu mulai wajib diisi.";
 		if (!waktuSelesai) return "Waktu selesai wajib diisi.";
 		const waktu = validasiWaktu(waktuMulai, waktuSelesai, Number(menitEfektif));
 		if (waktu[0]) return waktu[0];
+		if (!id) {
+			const backdate = validasiBackdate(waktuMulai);
+			if (backdate) return backdate;
+		}
 		if (Number(jumlahOutput) <= 0) return "Jumlah output harus lebih dari 0.";
 		if (!satuanOutput.trim()) return "Satuan output wajib diisi.";
 		if (buktiUrl.trim() && !/^https?:\/\//i.test(buktiUrl.trim())) {
@@ -464,14 +491,14 @@
 				method: id ? "PUT" : "POST",
 				body: JSON.stringify({
 					jenisTugas,
-					ikiId,
-					rencanaAksiId: aksiId,
-					isiManual,
-					produkId: produkId || undefined,
-					tahapanId: tahapanId || undefined,
-					aktivitasId: aktivitasId || undefined,
-					namaManualProduk,
-					namaManualTahapan,
+					ikiId: nonTusi ? "" : ikiId,
+					rencanaAksiId: nonTusi ? "" : aksiId,
+					isiManual: nonTusi ? false : isiManual,
+					produkId: nonTusi ? undefined : produkId || undefined,
+					tahapanId: nonTusi ? undefined : tahapanId || undefined,
+					aktivitasId: nonTusi ? undefined : aktivitasId || undefined,
+					namaManualProduk: nonTusi ? "" : namaManualProduk,
+					namaManualTahapan: nonTusi ? "" : namaManualTahapan,
 					uraian,
 					waktuMulai,
 					waktuSelesai,
@@ -507,82 +534,88 @@
 {/if}
 
 <form class="mx-auto mt-6 max-w-5xl space-y-8 pb-24 sm:pb-0" onsubmit={simpan}>
-	<section class="space-y-4 border-t border-border-strong pt-5">
-		<div>
-			<h2 class="text-sm font-semibold">Target kinerja</h2>
-			<p class="mt-1 text-sm text-muted">Pilih IKI, lalu rencana aksi yang dikerjakan hari ini.</p>
-		</div>
-		{#if skpSiap && daftarIki.length === 0}
-			<div class="border border-border px-4 py-3">
-				<p class="text-sm">Belum ada IKI pada SKP tahun ini.</p>
-				<a class="mt-1 inline-block text-sm text-accent" href="/app/skp">Buka SKP</a>
+	{#if !nonTusi}
+		<section class="space-y-4 border-t border-border-strong pt-5">
+			<div>
+				<h2 class="text-sm font-semibold">Target kinerja</h2>
+				<p class="mt-1 text-sm text-muted">Pilih IKI, lalu rencana aksi yang dikerjakan hari ini.</p>
 			</div>
-		{:else}
-			<div class="grid gap-4 md:grid-cols-2">
-				<PilihKatalog
-					label="IKI"
-					satuan="IKI"
-					placeholder="Ketik indikator…"
-					opsi={opsiIki}
-					nilai={ikiId}
-					onubah={ubahIki}
-					bolehKosong={false}
-					disabled={!skpSiap}
-					pesanNonaktif="Memuat IKI…"
-				/>
-				<PilihKatalog
-					label="Rencana aksi"
-					satuan="rencana aksi"
-					placeholder="Ketik uraian rencana aksi…"
-					opsi={opsiAksi}
-					nilai={aksiId}
-					onubah={(id) => (aksiId = id)}
-					bolehKosong={false}
-					disabled={aksiNonaktif}
-					pesanNonaktif={pesanAksiNonaktif}
-				/>
-			</div>
-		{/if}
-		{#if ikiTerpilih && aksiTerpilih}
-			<details class="border-y border-border py-3">
-				<summary class="cursor-pointer text-sm font-medium text-accent">Ringkasan target</summary>
-				<dl class="mt-3 grid gap-4 text-sm md:grid-cols-3">
-					<div>
-						<dt class="text-xs font-medium uppercase tracking-wide text-muted">RHK</dt>
-						<dd class="mt-1 whitespace-pre-wrap">{ikiTerpilih.rhkUraian}</dd>
-					</div>
-					<div>
-						<dt class="text-xs font-medium uppercase tracking-wide text-muted">IKI</dt>
-						<dd class="mt-1 whitespace-pre-wrap">{ikiTerpilih.indikator}</dd>
-						<dd class="mt-1 text-xs text-muted">
-							Target {ikiTerpilih.targetTahunan}
-							{ikiTerpilih.satuan} · {labelJenisIki(ikiTerpilih.jenis)}
-						</dd>
-					</div>
-					<div>
-						<dt class="text-xs font-medium uppercase tracking-wide text-muted">Rencana aksi</dt>
-						<dd class="mt-1 whitespace-pre-wrap">{aksiTerpilih.uraian}</dd>
-						<dd class="mt-1 text-xs text-muted">
-							TW{twCatatan}
-							{targetTw(aksiTerpilih, twCatatan)}{aksiTerpilih.satuan ? ` ${aksiTerpilih.satuan}` : ""}
-						</dd>
-					</div>
-				</dl>
-			</details>
-		{/if}
-	</section>
+			{#if skpSiap && daftarIki.length === 0}
+				<div class="border border-border px-4 py-3">
+					<p class="text-sm">Belum ada IKI pada SKP tahun ini.</p>
+					<a class="mt-1 inline-block text-sm text-accent" href="/app/skp">Buka SKP</a>
+				</div>
+			{:else}
+				<div class="grid gap-4 md:grid-cols-2">
+					<PilihKatalog
+						label="IKI"
+						satuan="IKI"
+						placeholder="Ketik indikator…"
+						opsi={opsiIki}
+						nilai={ikiId}
+						onubah={ubahIki}
+						bolehKosong={false}
+						disabled={!skpSiap}
+						pesanNonaktif="Memuat IKI…"
+					/>
+					<PilihKatalog
+						label="Rencana aksi"
+						satuan="rencana aksi"
+						placeholder="Ketik uraian rencana aksi…"
+						opsi={opsiAksi}
+						nilai={aksiId}
+						onubah={(id) => (aksiId = id)}
+						bolehKosong={false}
+						disabled={aksiNonaktif}
+						pesanNonaktif={pesanAksiNonaktif}
+					/>
+				</div>
+			{/if}
+			{#if ikiTerpilih && aksiTerpilih}
+				<details class="border-y border-border py-3">
+					<summary class="cursor-pointer text-sm font-medium text-accent">Ringkasan target</summary>
+					<dl class="mt-3 grid gap-4 text-sm md:grid-cols-3">
+						<div>
+							<dt class="text-xs font-medium uppercase tracking-wide text-muted">RHK</dt>
+							<dd class="mt-1 whitespace-pre-wrap">{ikiTerpilih.rhkUraian}</dd>
+						</div>
+						<div>
+							<dt class="text-xs font-medium uppercase tracking-wide text-muted">IKI</dt>
+							<dd class="mt-1 whitespace-pre-wrap">{ikiTerpilih.indikator}</dd>
+							<dd class="mt-1 text-xs text-muted">
+								Target {ikiTerpilih.targetTahunan}
+								{ikiTerpilih.satuan} · {labelJenisIki(ikiTerpilih.jenis)}
+							</dd>
+						</div>
+						<div>
+							<dt class="text-xs font-medium uppercase tracking-wide text-muted">Rencana aksi</dt>
+							<dd class="mt-1 whitespace-pre-wrap">{aksiTerpilih.uraian}</dd>
+							<dd class="mt-1 text-xs text-muted">
+								TW{twCatatan}
+								{targetTw(aksiTerpilih, twCatatan)}{aksiTerpilih.satuan ? ` ${aksiTerpilih.satuan}` : ""}
+							</dd>
+						</div>
+					</dl>
+				</details>
+			{/if}
+		</section>
+	{/if}
 
 	<div class="grid gap-8 border-t border-border-strong pt-5 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-x-10">
 		<section class="space-y-5">
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<div>
 					<h2 class="text-sm font-semibold">Jenis dan katalog</h2>
-					<p class="mt-1 text-sm text-muted">Tentukan sumber pekerjaan yang dicatat.</p>
+					<p class="mt-1 text-sm text-muted">
+						{nonTusi ? "Catat kegiatan di luar Tusi/SKP." : "Tentukan sumber pekerjaan yang dicatat."}
+					</p>
 				</div>
-				<label class="flex min-h-11 items-center gap-2 text-sm">
-					<input type="checkbox" bind:checked={isiManual} />
-					Produk belum tersedia
-				</label>
+				{#if !nonTusi}
+					<label class="flex min-h-11 items-center gap-2 text-sm">
+						<input type="checkbox" bind:checked={isiManual} />
+						Produk belum tersedia
+					</label>
+				{/if}
 			</div>
 
 			<fieldset>
@@ -603,13 +636,24 @@
 					<label
 						class="flex min-h-11 cursor-pointer items-center justify-center px-2 text-center text-sm has-[:checked]:bg-accent-muted has-[:checked]:font-medium has-[:checked]:text-accent"
 					>
-						<input class="sr-only" type="radio" bind:group={jenisTugas} value="NON_TUSI" />
+						<input
+							class="sr-only"
+							type="radio"
+							bind:group={jenisTugas}
+							value="NON_TUSI"
+							onchange={pilihNonTusi}
+						/>
 						Non Tusi
 					</label>
 				</div>
 			</fieldset>
 
-			{#if isiManual}
+			{#if nonTusi}
+				<p class="border-l-2 border-accent pl-4 text-xs text-muted">
+					Non Tusi tidak terhubung ke katalog atau SKP. Isi langsung uraian pelaksanaan dengan satuan
+					"Kali". Catatan Non Tusi tetap tersimpan sebagai riwayat, tetapi tidak menambah jam efektif.
+				</p>
+			{:else if isiManual}
 				<div class="space-y-4 border-l-2 border-accent pl-4">
 					<p class="text-xs text-muted">Usulan ini akan ditinjau untuk ditambahkan ke katalog.</p>
 					<label class="block text-sm"
@@ -710,7 +754,7 @@
 				<p class="mt-1 text-sm text-muted">Isi waktu, uraian pekerjaan, dan output yang dihasilkan.</p>
 			</div>
 			<label class="block text-sm">
-				Uraian <span class="text-muted">(wajib)</span>
+				{nonTusi ? "Uraian pelaksanaan" : "Uraian"} <span class="text-muted">(wajib)</span>
 				<textarea
 					class="mt-1 min-h-28 w-full rounded-md border border-border px-3 py-2"
 					rows="4"
@@ -723,6 +767,8 @@
 					>Mulai <span class="text-muted">(wajib)</span><input
 						class="mt-1 min-h-11 w-full min-w-0 rounded-md border border-border px-3 py-2 text-sm"
 						type="datetime-local"
+						min={id ? undefined : batasAwal}
+						max={batasAkhir}
 						bind:value={waktuMulai}
 					/></label
 				>
@@ -730,10 +776,15 @@
 					>Selesai <span class="text-muted">(wajib)</span><input
 						class="mt-1 min-h-11 w-full min-w-0 rounded-md border border-border px-3 py-2 text-sm"
 						type="datetime-local"
+						min={id ? undefined : batasAwal}
+						max={batasAkhir}
 						bind:value={waktuSelesai}
 					/></label
 				>
 			</div>
+			<p class="text-xs text-muted">
+				Catatan bisa diisi untuk {BATAS_HARI_BACKDATE} hari terakhir sampai hari ini.
+			</p>
 			<label class="block text-sm"
 				>Waktu efektif (menit) <span class="text-muted">(wajib)</span><input
 					class="mt-1 min-h-11 w-full rounded-md border border-border px-3 py-2 font-mono"
@@ -749,7 +800,7 @@
 			{/if}
 			<div class="grid grid-cols-2 gap-3">
 				<label class="block text-sm"
-					>Jumlah output <span class="text-muted">(wajib)</span><input
+					>{nonTusi ? "Jumlah kegiatan" : "Jumlah output"} <span class="text-muted">(wajib)</span><input
 						class="mt-1 min-h-11 w-full rounded-md border border-border px-3 py-2"
 						type="number"
 						min="0.01"
@@ -788,7 +839,7 @@
 	{#if peringatan}<p class="text-sm text-warning">{peringatan}</p>{/if}
 
 	<div
-		class="fixed inset-x-0 bottom-0 z-20 grid grid-cols-[auto_1fr] gap-3 border-t border-border-strong bg-surface px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:static sm:z-auto sm:flex sm:justify-end sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0"
+		class="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 grid grid-cols-[auto_1fr] gap-3 border-t border-border-strong bg-surface px-4 py-3 sm:static sm:z-auto sm:flex sm:justify-end sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0"
 	>
 		<a
 			class="inline-flex min-h-11 items-center justify-center rounded-md border border-border-strong px-4 text-sm text-accent"

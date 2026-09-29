@@ -103,3 +103,60 @@ export function adaOverlap(
 }
 
 export { TARGET_MENIT_EFEKTIF };
+
+/** Jendela pengisian catatan: paling lama sekian hari kalender ke belakang. */
+export const BATAS_HARI_BACKDATE = 4;
+
+/** Tenggat validasi: setelah sekian hari sejak diajukan, catatan disetujui otomatis. */
+export const BATAS_HARI_VALIDASI = 4;
+
+/** Selisih durasi kalender vs menit efektif yang masih dianggap wajar untuk auto-verifikasi. */
+export const SELISIH_ANOMALI_MENIT = 60;
+
+const OFFSET_WIB_MENIT = 7 * 60;
+const SEHARI_MS = 24 * 60 * 60 * 1000;
+
+/** Tanggal (YYYY-MM-DD) menurut zona Asia/Jakarta, tanpa bergantung zona waktu server. */
+export function tanggalWib(waktu: Date | string): string {
+	const d = typeof waktu === "string" ? new Date(waktu) : waktu;
+	return new Date(d.getTime() + OFFSET_WIB_MENIT * 60_000).toISOString().slice(0, 10);
+}
+
+function geserTanggal(tanggal: string, hari: number): string {
+	const d = new Date(`${tanggal}T00:00:00.000Z`);
+	d.setUTCDate(d.getUTCDate() + hari);
+	return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Periksa apakah catatan masih dalam jendela pengisian (default H-4 s.d. hari ini).
+ * Mengembalikan pesan galat, atau null bila sah.
+ */
+export function validasiBackdate(waktuMulai: string, sekarang: Date = new Date()): string | null {
+	if (!/^\d{4}-\d{2}-\d{2}/.test(waktuMulai)) return "Waktu mulai tidak valid.";
+	const tanggal = waktuMulai.slice(0, 10);
+	const batas = geserTanggal(tanggalWib(sekarang), -BATAS_HARI_BACKDATE);
+	if (tanggal < batas) {
+		return `Catatan hanya bisa diisi untuk ${BATAS_HARI_BACKDATE} hari terakhir (sejak ${batas}).`;
+	}
+	return null;
+}
+
+/**
+ * Auto-verifikasi tanpa kecuali hanya untuk catatan yang tidak mencurigakan:
+ * selisih durasi kalender vs menit efektif tidak melebihi ambang.
+ */
+export function layakAutoVerifikasi(menitEfektif: number, durasiMenit: number): boolean {
+	return selisihEvaluasi(durasiMenit, menitEfektif) <= SELISIH_ANOMALI_MENIT;
+}
+
+/** Apakah catatan SUBMIT sudah melewati tenggat validasi sejak diajukan. */
+export function melewatiTenggatValidasi(
+	diajukanPada: string | null,
+	sekarang: Date = new Date(),
+): boolean {
+	if (!diajukanPada) return false;
+	const ajukan = new Date(diajukanPada).getTime();
+	if (Number.isNaN(ajukan)) return false;
+	return sekarang.getTime() - ajukan >= BATAS_HARI_VALIDASI * SEHARI_MS;
+}

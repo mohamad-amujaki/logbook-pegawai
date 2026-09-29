@@ -8,6 +8,7 @@ import {
 import { zValidator } from "@hono/zod-validator";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { Hono } from "hono";
+import { rekonsiliasiAutoValidasi } from "../lib/auto-validasi";
 import { kirimNotifikasi } from "../lib/notify";
 import { requireAuth } from "../middleware/auth";
 
@@ -72,6 +73,7 @@ function bentukBaris(row: {
 		satuanOutput: catatan.satuanOutput,
 		catatanValidasi: catatan.catatanValidasi,
 		divalidasiPada: catatan.divalidasiPada,
+		divalidasiOtomatis: catatan.divalidasiOtomatis,
 	};
 }
 
@@ -79,6 +81,7 @@ export const validasiRoutes = new Hono()
 	.use(requireAuth)
 	.get("/", async (c) => {
 		const user = c.get("user");
+		await rekonsiliasiAutoValidasi();
 		const ids = await idBawahan(user.id);
 		if (ids.length === 0) return c.json({ adaBawahan: false, baris: [] });
 

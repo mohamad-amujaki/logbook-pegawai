@@ -4,10 +4,13 @@ import {
 	akumulasiMenitTercatat,
 	adaOverlap,
 	durasiKalenderMenit,
+	layakAutoVerifikasi,
 	masukJamEfektif,
 	masukJamTercatat,
+	melewatiTenggatValidasi,
 	selisihEvaluasi,
 	statusPemenuhan,
+	validasiBackdate,
 	validasiWaktu,
 } from "./jam-efektif";
 
@@ -76,5 +79,31 @@ describe("jam efektif", () => {
 				"2026-09-27T10:00:00",
 			),
 		).toBe(false);
+	});
+
+	it("menerima backdate sampai H-4 dan menolak yang lebih lama", () => {
+		const sekarang = new Date("2026-09-29T03:00:00.000Z"); // 10:00 WIB
+		expect(validasiBackdate("2026-09-29T08:00", sekarang)).toBeNull();
+		expect(validasiBackdate("2026-09-25T08:00", sekarang)).toBeNull();
+		expect(validasiBackdate("2026-09-24T08:00", sekarang)).not.toBeNull();
+	});
+
+	it("memakai tanggal WIB, bukan UTC, sebagai acuan hari", () => {
+		// 2026-09-29T23:30Z = 2026-09-30 06:30 WIB, jadi H-4 = 2026-09-26.
+		const malamWib = new Date("2026-09-29T23:30:00.000Z");
+		expect(validasiBackdate("2026-09-26T08:00", malamWib)).toBeNull();
+		expect(validasiBackdate("2026-09-25T08:00", malamWib)).not.toBeNull();
+	});
+
+	it("hanya catatan wajar yang layak auto-verifikasi", () => {
+		expect(layakAutoVerifikasi(80, 120)).toBe(true);
+		expect(layakAutoVerifikasi(30, 180)).toBe(false);
+	});
+
+	it("melewati tenggat validasi setelah 4 hari", () => {
+		const sekarang = new Date("2026-09-29T00:00:00.000Z");
+		expect(melewatiTenggatValidasi(null, sekarang)).toBe(false);
+		expect(melewatiTenggatValidasi("2026-09-26T00:00:00.000Z", sekarang)).toBe(false);
+		expect(melewatiTenggatValidasi("2026-09-25T00:00:00.000Z", sekarang)).toBe(true);
 	});
 });

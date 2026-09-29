@@ -15,6 +15,8 @@
 			uraian: string;
 			status: string;
 			jenisTugas: string;
+			isiManual: boolean;
+			divalidasiOtomatis: boolean;
 			menitEfektif: number;
 			jumlahOutput: number;
 			satuanOutput: string;
@@ -627,7 +629,7 @@
 			<dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
 				<div>
 					<dt class="text-xs text-muted">Status</dt>
-					<dd>{labelStatus(detail.catatan.status)}</dd>
+					<dd>{labelStatus(detail.catatan.status, detail.catatan.divalidasiOtomatis)}</dd>
 				</div>
 				<div>
 					<dt class="text-xs text-muted">Jenis tugas</dt>
@@ -635,7 +637,7 @@
 				</div>
 				<div class="col-span-2">
 					<dt class="text-xs text-muted">Katalog</dt>
-					<dd>{[detail.produkNama, detail.tahapanNama, detail.aktivitasNama].filter(Boolean).join(" / ") || "Isi manual"}</dd>
+					<dd>{[detail.produkNama, detail.tahapanNama, detail.aktivitasNama].filter(Boolean).join(" / ") || (detail.catatan.isiManual ? "Isi manual" : "—")}</dd>
 				</div>
 				<div>
 					<dt class="text-xs text-muted">Waktu efektif</dt>

@@ -24,8 +24,8 @@ export function labelJenis(jenis: string): string {
 	return "Non Tusi";
 }
 
-export function labelStatus(status: string): string {
-	if (status === "TERVERIFIKASI") return "Terverifikasi";
+export function labelStatus(status: string, otomatis = false): string {
+	if (status === "TERVERIFIKASI") return otomatis ? "Disetujui otomatis" : "Terverifikasi";
 	if (status === "SUBMIT") return "Menunggu";
 	if (status === "DITOLAK") return "Ditolak";
 	if (status === "TERPENUHI") return "Terpenuhi";
