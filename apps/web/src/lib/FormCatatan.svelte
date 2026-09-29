@@ -87,6 +87,7 @@
 	let waktuMulai = $state("");
 	let waktuSelesai = $state("");
 	let menitEfektif = $state(0);
+	let menitManual = $state(false);
 	let jumlahOutput = $state(1);
 	let satuanOutput = $state("Dokumen");
 	let kategori = $state<"BIASA" | "PERLU_DISKUSI">("BIASA");
@@ -101,8 +102,7 @@
 			const d = (new Date(waktuSelesai).getTime() - new Date(waktuMulai).getTime()) / 60000;
 			if (d <= 0) return;
 			const durasi = Math.round(d);
-			if (menitEfektif === 0) menitEfektif = durasi;
-			else if (menitEfektif > durasi) menitEfektif = durasi;
+			if (!menitManual || menitEfektif > durasi) menitEfektif = durasi;
 		}
 	});
 
@@ -355,6 +355,10 @@
 			waktuMulai = keInputWaktu(row.waktuMulai);
 			waktuSelesai = keInputWaktu(row.waktuSelesai);
 			menitEfektif = row.menitEfektif;
+			const durasiBaris = Math.round(
+				(new Date(waktuSelesai).getTime() - new Date(waktuMulai).getTime()) / 60000,
+			);
+			menitManual = durasiBaris > 0 && menitEfektif !== durasiBaris;
 			jumlahOutput = row.jumlahOutput;
 			satuanOutput = row.satuanOutput;
 			kategori = row.kategori === "PERLU_DISKUSI" ? "PERLU_DISKUSI" : "BIASA";
@@ -794,6 +798,7 @@
 					type="number"
 					min="1"
 					max={durasiKalender || undefined}
+					oninput={() => (menitManual = true)}
 					bind:value={menitEfektif}
 				/></label
 			>
