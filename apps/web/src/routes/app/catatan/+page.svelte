@@ -231,7 +231,15 @@
 	}
 
 	async function muat() {
-		rows = await api("/catatan");
+		pesan = "";
+		try {
+			rows = await api("/catatan");
+		} catch (err) {
+			rows = [];
+			pesan =
+				err instanceof ApiError ? err.message : "Tidak dapat memuat catatan. Muat ulang halaman.";
+			return;
+		}
 		if (produkId && !opsiProduk.some((o) => o.id === produkId)) produkId = "";
 		terpilih = terpilih.filter((id) =>
 			rows.some((r) => r.catatan.id === id && bolehKirim(r.catatan.status)),
