@@ -99,7 +99,10 @@
 	$effect(() => {
 		if (waktuMulai && waktuSelesai) {
 			const d = (new Date(waktuSelesai).getTime() - new Date(waktuMulai).getTime()) / 60000;
-			if (d > 0 && menitEfektif === 0) menitEfektif = Math.round(d);
+			if (d <= 0) return;
+			const durasi = Math.round(d);
+			if (menitEfektif === 0) menitEfektif = durasi;
+			else if (menitEfektif > durasi) menitEfektif = durasi;
 		}
 	});
 
@@ -790,12 +793,14 @@
 					class="mt-1 min-h-11 w-full rounded-md border border-border px-3 py-2 font-mono"
 					type="number"
 					min="1"
+					max={durasiKalender || undefined}
 					bind:value={menitEfektif}
 				/></label
 			>
 			{#if durasiKalender > 0}
 				<p class="text-xs text-muted" aria-live="polite">
-					Durasi kalender {labelDurasi(durasiKalender)} · waktu efektif {labelDurasi(Number(menitEfektif) || 0)}
+					Otomatis dari durasi (selesai − mulai), boleh dikurangi. Maksimal {durasiKalender} menit —
+					saat ini {labelDurasi(Number(menitEfektif) || 0)}.
 				</p>
 			{/if}
 			<div class="grid grid-cols-2 gap-3">
