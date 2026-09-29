@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| **Versi** | 1.1 |
-| **Status** | Terkunci hasil wawancara + realisasi prototype, 27 September 2026 |
-| **PRD** | [PRD.md](./PRD.md) v1.2 |
+| **Versi** | 1.2 |
+| **Status** | Terkunci hasil wawancara + realisasi prototype, 29 September 2026 |
+| **PRD** | [PRD.md](./PRD.md) v1.4 |
 | **DESIGN** | [DESIGN.md](./DESIGN.md) v2.1 |
-| **Realisasi** | §Status implementasi (realisasi) + PRD §25 |
+| **Realisasi** | §Status implementasi (realisasi) + PRD §26 (rev. 1.3) dan §27 (rev. 1.4) |
 
 ---
 
@@ -24,7 +24,7 @@
 | ORM | Drizzle | |
 | Database lokal | SQLite | Dev |
 | Database produksi | Cloudflare D1 | SQLite di edge |
-| Deploy | Cloudflare (Pages dan/atau Workers) | |
+| Deploy | Cloudflare Workers (web via `@sveltejs/adapter-cloudflare`, API Worker) + D1 | |
 | Lint/format | Biome | Ganti ESLint + Prettier |
 | Git hooks | Husky | `biome check` di pre-commit |
 | Tes | Vitest | Unit + tes schema/aturan jam efektif |
@@ -35,20 +35,22 @@
 
 ## Status implementasi (realisasi)
 
-Kondisi kode per 27 September 2026 (rincian lengkap di [PRD.md](./PRD.md) §25):
+Kondisi kode per 29 September 2026 (rincian lengkap di [PRD.md](./PRD.md) §26 untuk rev. 1.3 dan §27 untuk rev. 1.4):
 
 | Lapisan | Realisasi |
 |---|---|
-| Runtime / package | Bun 1.4 (Bun workspaces) |
+| Runtime / package | Bun (Bun workspaces) |
 | Web | SvelteKit 2 · Svelte 5 (runes `$state`/`$props`/`$derived`) · Vite 7 · Tailwind CSS 4 (`@tailwindcss/vite`) |
-| API | Hono 4 · `@hono/zod-validator` · `basePath /api` · cookie sesi httpOnly |
-| DB | Drizzle ORM 0.44 · `bun:sqlite` (dev, `local.db`) · target Cloudflare D1 |
+| API | Hono 4 · `@hono/zod-validator` · `basePath /api` · cookie sesi httpOnly · Worker dengan handler `fetch` + `scheduled` (cron harian 00:00 WIB) |
+| DB | Drizzle ORM 0.44 · `bun:sqlite` (dev, `local.db`) · Cloudflare D1 (prod) · 19 tabel |
 | Validasi | Zod 3 di `packages/schemas`, dipakai bersama UI dan API |
-| Auth | PBKDF2-SHA256 100.000 iterasi + salt 16 byte (Web Crypto); tabel `sesi` + cookie `logbook_sesi`, httpOnly, SameSite=Lax, 7 hari |
+| Auth | Akun terpisah (`akun`, `akun_peran`, `audit_log`); PBKDF2-SHA256 100.000 iterasi + salt 16 byte (Web Crypto); cookie `logbook_sesi` httpOnly, SameSite=Lax, 7 hari; wajib ganti sandi sebelum mengakses aplikasi |
 | Lint/format | Biome **2.5.14** (dipin di `devDependencies` root); `bun run check` hijau |
-| Tes | Vitest di `packages/schemas` (aturan jam efektif) |
+| Tes | Vitest: aturan jam efektif + backdate + auto-verifikasi (`packages/schemas`), otorisasi & laporan (`apps/api`) |
 
-Belum terpasang (lihat PRD §25.9): impor/ekspor Excel, audit trail, soft-delete, delegasi/SLA validasi, kurasi usulan katalog, konfigurasi jam kerja/kalender libur.
+Fitur rev. 1.3–1.4 yang terpasang: manajemen akun/peran + audit akun, lima jenis laporan kinerja dengan ekspor PDF/XLSX, tampilan kalender catatan, alur **Non Tusi** tanpa katalog/SKP, **jendela backdate 4 hari**, dan **auto-verifikasi validasi** setelah 4 hari (penanda `divalidasi_otomatis`).
+
+Belum terpasang: impor/ekspor Excel master dan katalog, kurasi usulan katalog, konfigurasi jam kerja/kalender libur, delegasi validasi + reminder/email, multi-tautan bukti, dan unggah berkas.
 
 ---
 
@@ -64,7 +66,7 @@ Belum terpasang (lihat PRD §25.9): impor/ekspor Excel, audit trail, soft-delete
 | **Bun workspaces** | `apps/web`, `apps/api`, `packages/db`, `packages/schemas`. |
 | **Hash sandi yang aman di Workers** | `bcrypt` berat/tidak cocok di Cloudflare. **Realisasi:** Web Crypto PBKDF2-SHA256 100.000 iterasi. |
 | **Sesi di D1 + cookie httpOnly** | Bisa cabut akses; JWT murni sulit di-revoke. **Realisasi:** cookie `logbook_sesi`. |
-| **Zona waktu Asia/Jakarta** | SQLite simpan UTC; tampilan `WIB`. **Belum diterapkan konsisten.** |
+| **Zona waktu Asia/Jakarta** | SQLite simpan UTC; tampilan `WIB`. **Realisasi:** `tanggalWib()` (offset tetap UTC+7) dipakai untuk aturan backdate; format tampilan lain masih mengikuti zona runtime. |
 | **Seed dari DUK** | Script impor `data/LAPORAN DUK Pegawai Biro OSDM.xlsx`. **Realisasi:** `bun run db:seed` dari `data/duk-pegawai.json`. |
 
 ### Sebaiknya ada di prototype
@@ -75,8 +77,8 @@ Belum terpasang (lihat PRD §25.9): impor/ekspor Excel, audit trail, soft-delete
 | **Rate limit login** | NIP + sandi awal (NIP) mudah ditembak. |
 | **lint-staged** + Husky | Hanya berkas yang berubah yang di-Biome. |
 | **Vitest** untuk rumus jam efektif | 80 vs 120, Non TUSI = 0, tolak tidak terakumulasi. |
-| **ExcelJS / SheetJS** | Impor DUK dan master lain. |
-| ** wrangler types** | `Cloudflare.D1Database` ter-type. |
+| **`xlsx` (SheetJS)** | Sudah dipakai untuk ekspor laporan PDF/XLSX; impor master belum ada. |
+| **`wrangler types`** | Binding `D1Database` ter-type. |
 
 ### Ditunda (selaras PRD)
 
@@ -107,7 +109,7 @@ packages/db       Drizzle schema + klien bun:sqlite + migrasi inline
 packages/schemas  Zod: catatan, SKP, auth, validasi, jam efektif
 ```
 
-Catatan: `packages/config` pada usulan awal **tidak dibuat**; konfigurasi Biome dan TSConfig di root (`biome.json`, `tsconfig.base.json`). Migrasi tidak memakai `drizzle-kit` — DDL dijalankan langsung di `packages/db/src/migrate.ts`.
+Catatan: `packages/config` pada usulan awal **tidak dibuat**; konfigurasi Biome dan TSConfig di root (`biome.json`, `tsconfig.base.json`). Skema tidak digenerate `drizzle-kit`: `packages/db/src/migrate.ts` menjalankan DDL idempoten untuk SQLite lokal, sedangkan D1 memakai `packages/db/migrations/*.sql` via `wrangler d1 migrations apply`.
 
 API dan form memakai **schema Zod yang sama** — itu alasan monorepo, bukan banyak package kosmetik.
 
@@ -121,6 +123,9 @@ API dan form memakai **schema Zod yang sama** — itu alasan monorepo, bukan ban
 4. Ganti sandi di login pertama.
 5. Logout hapus sesi.
 6. Rate limit login in-memory: 10 percobaan / 15 menit per NIP.
+7. Kredensial dan lifecycle akses berada di `akun`; peran di `akun_peran` (`ADMIN`, `KEPALA_BIRO`, `PENGELOLA_UNIT` dengan cakupan unit). Relasi validasi diturunkan dari SKP, bukan peran manual.
+8. Middleware `requireAuth` menolak akses dengan kode `WAJIB_GANTI_SANDI` kecuali ke `/auth/ganti-sandi`, `/auth/logout`, dan `/me`.
+9. Penangguhan akun, reset sandi, dan penonaktifan pegawai mencabut sesi aktif; administrator aktif terakhir dilindungi.
 
 ---
 

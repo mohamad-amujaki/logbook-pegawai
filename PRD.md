@@ -3,17 +3,17 @@
 | Atribut | Isi |
 |---|---|
 | Nama produk | Logbook Kinerja Pegawai ASN Kemenkes |
-| Versi | 1.3 |
+| Versi | 1.4 |
 | Status | Prototype produksi — sinkron dengan implementasi dan rollout |
-| Tanggal | 28 September 2026 (rev. 1.3 — Access, Reports, and UX Overhaul) |
+| Tanggal | 29 September 2026 (rev. 1.4 — Non Tusi, Backdate, dan Auto-verifikasi Validasi) |
 | Pemilik produk | Product owner, pegawai Biro OSDM |
-| Realisasi | §26 Status implementasi produksi rev. 1.3 (kondisi kode saat ini) |
+| Realisasi | §27 Status implementasi produksi rev. 1.4 (kondisi kode saat ini) |
 | Sumber konsep awal | [Percakapan DeepSeek](https://chat.deepseek.com/share/v2zpxd9idx6a3kgvsz) |
 | Referensi resmi | KMK HK.01.07/MENKES/65/2026; Standar Interoperabilitas Logbook Kemenkes v1 2026.09.26 |
 | Tech | [TECH.md](./TECH.md) — Svelte 5, Bun, Hono, Zod, Drizzle, SQLite/D1, Cloudflare |
 | Audiens | Product owner, Biro OSDM, atasan, tim pengembang, keamanan informasi |
 
-Dokumen ini merangkum konsep awal, hasil review, keputusan wawancara product owner (27 September 2026), dan realisasi produk sampai rollout 28 September 2026. Rilis pertama adalah **prototype aplikasi terpisah** yang melengkapi e-Kinerja, dipakai internal Biro OSDM untuk demo ke pimpinan.
+Dokumen ini merangkum konsep awal, hasil review, keputusan wawancara product owner (27 September 2026), dan realisasi produk sampai rollout 29 September 2026. Rilis pertama adalah **prototype aplikasi terpisah** yang melengkapi e-Kinerja, dipakai internal Biro OSDM untuk demo ke pimpinan.
 
 ---
 
@@ -97,7 +97,7 @@ Peran “Penyusun SOP” dan “Verifikator SOP” dari konsep awal **tidak masu
 
 1. Login NIP + kata sandi awal, plus RBAC (ASN, atasan, admin OSDM, pimpinan).
 2. Form master: unit, jabatan, pegawai, atasan, SKP (RHK, IKI, rencana aksi), katalog produk/tahapan sesuai struktur KMK.
-3. Form catatan harian: jenis tugas, satu produk/tahapan (atau isi manual), uraian, output, mulai, selesai, menit efektif, tautan bukti, kategori Biasa/Perlu Diskusi.
+3. Form catatan harian: jenis tugas, satu produk/tahapan (atau isi manual) khusus Tusi/Tusi Lainnya — Non Tusi langsung mengisi uraian pelaksanaan tanpa katalog/SKP, uraian, output, mulai, selesai, menit efektif, tautan bukti, kategori Biasa/Perlu Diskusi.
 4. Validasi atasan: setujui atau tolak; pegawai memperbaiki lalu diajukan lagi.
 5. Dashboard jam kerja efektif (target 6,5 jam) + klasemen per unit kerja dan per tim kerja.
 6. Antrian isi manual untuk Biro OSDM.
@@ -106,6 +106,8 @@ Peran “Penyusun SOP” dan “Verifikator SOP” dari konsep awal **tidak masu
 9. Manajemen pengguna: aktivasi/penangguhan akun, reset sandi, pencabutan sesi, peran, cakupan unit, dan audit tindakan.
 10. Laporan kinerja bercakupan peran: aktivitas harian, jam efektif terverifikasi, validasi, keterhubungan katalog, dan kelengkapan SKP; pratinjau serta ekspor PDF/XLSX.
 11. Navigasi responsif berbasis kelompok pekerjaan, pemantauan, dan administrasi.
+12. Jendela pengisian catatan: backdate maksimum 4 hari kalender (acuan zona Asia/Jakarta), ditegakkan di klien dan server.
+13. Auto-verifikasi catatan yang melewati tenggat validasi 4 hari, dengan penanda sistem, notifikasi, dan pengecualian untuk isian tidak wajar.
 
 ### 5.2 Out of scope — fase berikutnya
 
@@ -150,9 +152,9 @@ Konsep awal memisahkan SKP (RHK/IKI/aksi) dan logbook (produk/tahapan). Tanpa je
 Keputusan:
 
 - Setiap catatan **wajib** memilih jenis tugas: TUSI / TUSI Lainnya / Non TUSI.
-- Setiap catatan menempel ke **tepat satu** produk/tahapan, atau isi manual jika belum ada di master.
+- Catatan **TUSI dan TUSI Lainnya** menempel ke **tepat satu** produk/tahapan (atau isi manual) **dan wajib tertaut ke IKI + rencana aksi** dari SKP tahun berjalan.
+- Catatan **Non Tusi** tidak menempel ke katalog maupun SKP: cukup uraian pelaksanaan, waktu, jumlah kegiatan dengan satuan default "Kali", kategori, dan bukti opsional.
 - SKP di prototype cukup diinput sebagai master (identitas, RHK, IKI, target, satuan, rencana aksi). Tidak ada alur persetujuan SKP.
-- Tautan catatan ke IKI/rencana aksi: opsional di prototype; boleh diisi jika master SKP sudah ada.
 
 ### 6.4 Rapikan hierarki katalog tanpa membuang data bisnis
 
@@ -199,8 +201,8 @@ Keputusan:
   2. **Pejabat penilai kinerja**.
 - Keduanya harus pegawai yang sudah ada di master.
 - Validasi catatan harian dan klasemen bawahan memakai **pemberi pertimbangan**. Pejabat penilai melihat rekap periode.
-- Atasan dapat mendelegasikan validasi ke pegawai lain untuk rentang tanggal, dengan jejak audit.
-- SLA validasi default 3 hari kerja; reminder H+2 dan H+3.
+- Atasan dapat mendelegasikan validasi ke pegawai lain untuk rentang tanggal, dengan jejak audit. (**Belum terpasang**; lihat §27.3.)
+- Tenggat validasi default **4 hari kalender** sejak catatan diajukan. Catatan yang melewati tenggat **disetujui otomatis** oleh sistem (status `TERVERIFIKASI` + penanda `divalidasi_otomatis`) dengan notifikasi ke pegawai dan atasan. Catatan yang tidak wajar (selisih durasi kalender vs menit efektif > 60 menit) **tidak** ikut otomatis dan tetap menunggu keputusan manusia.
 - Bulk approve diizinkan, tetapi wajib konfirmasi dan tetap tercatat per catatan.
 - Tolak vs revisi dibedakan: revisi mengembalikan ke pegawai; tolak dipakai jika catatan tidak sah (duplikat, fiktif, salah orang).
 
@@ -257,9 +259,10 @@ Ditunda dari konsep awal: versioning SOP 5 versi, import katalog massal di hari 
 Admin OSDM mengisi master (pegawai, atasan, SKP, katalog KMK, target 6,5 jam)
         ↓
 ASN mengisi catatan harian
-  (jenis tugas + 1 produk/tahapan atau isi manual + waktu + output + kategori)
+  (jenis tugas + [Tusi/Tusi Lainnya] 1 produk/tahapan atau isi manual + IKI/rencana aksi
+   [Non Tusi] uraian pelaksanaan langsung + waktu + output + kategori)
         ↓
-Atasan setujui atau tolak
+Atasan setujui atau tolak; catatan yang melewati tenggat 4 hari disetujui otomatis
         ↓
 Yang disetujui + TUSI/TUSI Lainnya → akumulasi jam efektif
 Yang ditolak → tidak dihitung; pegawai perbaiki → diajukan lagi
@@ -268,7 +271,7 @@ Non TUSI disetujui → tercatat, 0 kontribusi ke jam efektif
 Klasemen atasan / unit + antrian isi manual untuk OSDM
 ```
 
-Status catatan: `DRAFT` → `SUBMIT` → `TERVERIFIKASI` | `DITOLAK` (ditolak bisa diedit lalu submit ulang).
+Status catatan: `DRAFT` → `SUBMIT` → `TERVERIFIKASI` | `DITOLAK` (ditolak bisa diedit lalu submit ulang). `TERVERIFIKASI` dapat berasal dari atasan atau dari auto-verifikasi melewati tenggat (ditandai `divalidasi_otomatis`).
 
 Status SKP prototype: `TERSIMPAN` saja.
 
@@ -366,15 +369,16 @@ Input pegawai memakai Produk + Tahapan + Aktivitas. Proses dan turunan tetap dik
 | FR-LG-03 | Pilih dari pin, pencarian, atau (kemudian) sering digunakan | M |
 | FR-LG-04 | Isi manual jika item tidak ada; wajib nama produk dan tahapan usulan | M |
 | FR-LG-05 | Usulan norma waktu opsional pada isi manual | M |
-| FR-LG-06 | Tautan IKI atau rencana aksi SKP (opsional di prototype) | S |
+| FR-LG-06 | Tautan IKI + rencana aksi SKP (wajib untuk Tusi/Tusi Lainnya) | M |
 | FR-LG-06b | Kategori Biasa / Perlu Diskusi | M |
-| FR-LG-06c | Satu catatan = satu produk/tahapan | M |
+| FR-LG-06c | Satu catatan = satu produk/tahapan (Non Tusi dikecualikan) | M |
 | FR-LG-07 | Waktu efektif otomatis dari selisih mulai–selesai; boleh dikurangi dengan alasan | M |
 | FR-LG-08 | Simpan draft, edit, submit | M |
 | FR-LG-09 | Filter daftar: tanggal, jenis, produk, status | M |
 | FR-LG-10 | Hapus hanya draft milik sendiri | M |
 | FR-LG-11 | Duplikasi catatan ke hari yang sama atau berikutnya | S |
 | FR-LG-12 | Tampilan kalender | S |
+| FR-LG-13 | Jendela backdate maksimum 4 hari kalender (acuan zona Asia/Jakarta) | M |
 
 Validasi waktu:
 
@@ -386,6 +390,8 @@ Validasi waktu:
 - Jumlah output > 0.
 - Waktu tumpang tindih antar catatan tidak diblokir; sistem menampilkan peringatan/keterangan.
 - Uraian Non TUSI bebas diketik (bukan dropdown baku).
+- Backdate maksimum 4 hari kalender (acuan zona Asia/Jakarta); tanggal lebih lama ditolak saat membuat catatan, dan ditolak saat mengubah bila tanggal digeser. Draf/revisi lama dengan tanggal tidak berubah tetap boleh disimpan.
+- Catatan Non Tusi tidak memerlukan IKI, rencana aksi, produk, maupun tahapan.
 
 ### 8.6 Jam kerja tercatat
 
@@ -418,13 +424,14 @@ Jam efektif resmi = menit efektif catatan **terverifikasi** berjenis TUSI atau T
 
 | Kode | Kebutuhan | Prioritas |
 |---|---|---|
-| FR-VL-01 | Antrian catatan bawahan: menunggu, terlambat SLA, riwayat | M |
+| FR-VL-01 | Antrian catatan bawahan: menunggu, tenggat validasi 4 hari, riwayat | M |
 | FR-VL-02 | Setujui atau tolak; komentar wajib saat tolak; pegawai memperbaiki lalu submit ulang | M |
 | FR-VL-03 | Lihat uraian, waktu, output, tautan SKP, bukti | M |
 | FR-VL-04 | Delegasi validasi berjangka | M |
 | FR-VL-05 | Bulk approve dengan konfirmasi | S |
 | FR-VL-06 | Atasan boleh menyesuaikan waktu efektif dengan alasan | S |
-| FR-VL-07 | Reminder SLA dan notifikasi hasil ke ASN | M |
+| FR-VL-07 | Notifikasi hasil validasi ke ASN dan notifikasi auto-verifikasi ke ASN/atasan | M |
+| FR-VL-08 | Auto-verifikasi catatan yang melewati tenggat 4 hari, dengan penanda sistem, audit, dan pengecualian anomali | M |
 
 ### 8.9 Usulan katalog (Biro OSDM)
 
@@ -528,7 +535,7 @@ Prinsip data:
 ## 11. Aturan bisnis kritis
 
 1. Satu SKP aktif per pegawai per tahun; di prototype hanya disimpan.
-2. Satu catatan = satu produk/tahapan, atau isi manual.
+2. Satu catatan Tusi/Tusi Lainnya = satu produk/tahapan (atau isi manual) **dan** satu tautan IKI + rencana aksi; Non Tusi tidak terikat katalog maupun SKP.
 3. Catatan terverifikasi terkunci sampai ditolak/dibuka ulang oleh atasan.
 4. Jam efektif resmi hanya dari catatan terverifikasi berjenis TUSI atau TUSI Lainnya.
 5. Non TUSI tercatat tetapi kontribusi jam efektif = 0.
@@ -537,6 +544,9 @@ Prinsip data:
 8. Isi manual boleh disetujui atasan dan selalu masuk masukan OSDM.
 9. Target efektif default 6,5 jam; jam kantor 7,5 jam hanya konteks, bukan pembatas input.
 10. Sistem tidak menolak input hanya karena jam efektif kurang.
+11. Catatan hanya dapat diisi untuk 4 hari kalender terakhir sampai hari ini (acuan zona Asia/Jakarta).
+12. Catatan yang belum ditinjau melewati tenggat 4 hari disetujui otomatis; isian tidak wajar tetap menunggu keputusan atasan.
+13. Catatan hasil auto-verifikasi tetap dihitung sebagai waktu terverifikasi (TUSI/Tusi Lainnya) dan ditandai "Disetujui otomatis" di UI.
 
 ---
 
@@ -602,6 +612,9 @@ Prinsip data:
 6. Klasemen menampilkan pemenuhan vs 6,5 jam per bawahan, per unit, dan rata-rata unit.
 7. Isi manual yang disetujui tetap masuk antrian masukan Biro OSDM.
 8. Kategori Biasa / Perlu Diskusi tersimpan dan dapat difilter atasan.
+9. Catatan Non Tusi dapat disimpan tanpa IKI/rencana aksi dan tanpa produk/tahapan, dengan satuan default "Kali".
+10. Catatan tidak dapat diisi untuk tanggal lebih lama dari 4 hari ke belakang.
+11. Catatan berstatus menunggu yang melewati 4 hari tanpa tindakan menjadi terverifikasi otomatis dan ditandai "Disetujui otomatis" di UI.
 
 ---
 
@@ -625,7 +638,7 @@ Jangan memperluas ke seluruh Kemenkes sebelum unit piloting mencapai metrik isia
 |---|---|---|
 | Logbook dipakai sebagai absensi gelap | Konflik aturan, data dimanipulasi | Label “jam kerja tercatat”; validasi atasan; jangan tautkan tunjangan |
 | Katalog kosong di hari pertama | Isi manual meledak | Seed katalog unit piloting sebelum go-live |
-| Atasan tidak memvalidasi | Rekap resmi kosong | SLA, reminder, delegasi, dashboard keterlambatan |
+| Atasan tidak memvalidasi | Rekap resmi kosong | Auto-verifikasi 4 hari (terpasang); reminder, delegasi, dan dashboard keterlambatan (lanjutan) |
 | Relasi atasan salah | Antrian masuk ke orang yang tidak berwenang | Admin unit wajib review mapping sebelum piloting |
 | Form terlalu panjang | Adopsi rendah | Pin, autosave, field admin disembunyikan |
 | Usulan katalog menumpuk | OSDM kewalahan | Grouping kemiripan, kuota tinjauan, top-N |
@@ -710,7 +723,7 @@ Yang diperbaiki di dokumen ini:
 | Non TUSI | Dicatat, tidak dihitung; hanya Non TUSI = 0 jam efektif |
 | Validasi | Setujui / tolak; ditolak tidak terakumulasi; bisa diperbaiki |
 | Isi manual | Boleh; atasan boleh setujui; jadi masukan OSDM |
-| Kardinalitas | Satu catatan = satu produk/tahapan |
+| Kardinalitas | Tusi = satu produk/tahapan + tautan IKI/rencana aksi; Non Tusi tanpa keduanya |
 | SKP | Master/input saja di rilis 1 |
 | Kategori | Biasa / Perlu Diskusi dipakai di prototype |
 | API Hub | Fase berikutnya |
@@ -721,6 +734,8 @@ Yang diperbaiki di dokumen ini:
 | Filter klasemen | Harian, bulanan, dan rentang tanggal |
 | Overlap waktu catatan | Tidak diblokir; hanya peringatan/keterangan |
 | Uraian Non TUSI | Bebas diketik, bukan daftar baku |
+| Backdate | Maksimum 4 hari kalender ke belakang (acuan zona Asia/Jakarta) |
+| Tenggat validasi | 4 hari sejak diajukan → auto-verifikasi; isian tidak wajar tetap manual |
 | Siapa lihat agregat Biro OSDM | Kepala Biro Organisasi dan SDM, serta Admin |
 | Rencana aksi | Child setiap IKI; uraian + target TW1–TW4 wajib, default 0 |
 | Kelompok SKP | Prototype hanya A. Utama; B. Tambahan belakangan |
@@ -806,7 +821,7 @@ Satu file, satu sheet per master. Kosongkan baris jika belum ada; header jangan 
 
 ## 25. Status implementasi prototype (realisasi kode)
 
-> Snapshot historis rev. 1.2 (27 September 2026). Status ini dipertahankan untuk melihat perubahan antarrevisi dan **telah digantikan oleh §26**. Jika bagian ini bertentangan dengan §26, gunakan §26 sebagai kondisi kode dan produksi saat ini.
+> Snapshot historis rev. 1.2 (27 September 2026). Status ini dipertahankan untuk melihat perubahan antarrevisi dan **telah digantikan oleh §27**. Jika bagian ini bertentangan dengan §27, gunakan §27 sebagai kondisi kode dan produksi saat ini.
 
 ### 25.1 Stack yang terpasang
 
@@ -1043,7 +1058,7 @@ Status: **T** = terpasang, **S** = sebagian, **B** = belum.
 
 ## 26. Status implementasi produksi rev. 1.3
 
-> Bagian ini adalah sumber kebenaran realisasi per 28 September 2026 setelah **Access, Reports, and UX Overhaul**. Implementasi telah dimigrasikan dan dideploy ke Cloudflare Workers/D1.
+> Snapshot historis rev. 1.3 per 28 September 2026 setelah **Access, Reports, and UX Overhaul**. Implementasi telah dimigrasikan dan dideploy ke Cloudflare Workers/D1. Bagian ini **telah digantikan oleh §27**; gunakan §27 bila bertentangan.
 
 ### 26.1 Arsitektur akun, akses, dan audit
 
@@ -1125,8 +1140,7 @@ Endpoint:
 
 ```
 POST /api/laporan/preview
-POST /api/laporan/export/pdf
-POST /api/laporan/export/xlsx
+POST /api/laporan/export/:format   (format: pdf | xlsx)
 ```
 
 ### 26.5 Terminologi waktu
@@ -1227,3 +1241,59 @@ Tambahan rev. 1.3:
 5. Konfigurasi target/jam kerja, kalender libur, cuti/izin.
 6. Multi-tautan atau unggah bukti dengan penandaan Sesuai/Tidak Sesuai.
 7. SSO Kemenkes dan interoperabilitas API Hub.
+
+---
+
+## 27. Status implementasi produksi rev. 1.4
+
+> Sumber kebenaran realisasi per 29 September 2026. Menggantikan §26 bila bertentangan. Fokus perubahan: alur Non Tusi, jendela backdate 4 hari, dan auto-verifikasi validasi.
+
+### 27.1 Non Tusi tanpa Target Kinerja dan katalog
+
+- Jenis tugas tetap tiga: TUSI, TUSI Lainnya, Non TUSI (`packages/schemas/src/enums.ts`).
+- **Tusi / Tusi Lainnya**: form dan server mewajibkan tautan IKI + rencana aksi (`catatanSchema` + `tautanSkpSah` di `apps/api/src/routes/catatan.ts`) serta produk/tahapan (atau isi manual).
+- **Non Tusi**: bagian Target Kinerja dan pemilih katalog disembunyikan. Pegawai langsung mengisi uraian pelaksanaan, waktu, jumlah kegiatan, kategori, dan bukti opsional; satuan otomatis terisi **"Kali"** (tetap dapat diubah), dan label field menjadi "Uraian pelaksanaan" dan "Jumlah kegiatan".
+- Server menolkan `iki_id`, `rencana_aksi_id`, `produk_id`, `tahapan_id`, `aktivitas_id`, `isi_manual`, dan data usulan manual untuk catatan Non Tusi (`nilaiIsian`).
+- Tombol Simpan aktif tanpa SKP/IKI untuk Non Tusi. Narasi form: "Non Tusi tidak terhubung ke katalog atau SKP… tidak menambah jam efektif."
+- Kontribusi jam efektif Non Tusi tetap 0 (§6.2).
+
+### 27.2 Jendela backdate 4 hari
+
+- `BATAS_HARI_BACKDATE = 4` (`packages/schemas/src/jam-efektif.ts`).
+- `validasiBackdate(waktuMulai, sekarang)` memakai acuan tanggal **Asia/Jakarta** (offset tetap UTC+7) sehingga tidak bergantung zona waktu server.
+- Ditegakkan server saat **membuat** catatan (`galatIsian` tanpa `kecualiId`) dan saat **mengubah** bila tanggal digeser; draf/revisi lama dengan tanggal tidak berubah tetap dapat diperbaiki dan diajukan.
+- Form memasang `min` (H-4, hanya saat membuat) dan `max` (hari ini) pada input Mulai/Selesai, ditambah hint "Catatan bisa diisi untuk 4 hari terakhir sampai hari ini." dan validasi klien.
+
+### 27.3 Auto-verifikasi validasi
+
+- `BATAS_HARI_VALIDASI = 4` dan `SELISIH_ANOMALI_MENIT = 60` (`packages/schemas/src/jam-efektif.ts`).
+- `rekonsiliasiAutoValidasi()` (`apps/api/src/lib/auto-validasi.ts`) mengubah catatan `SUBMIT` yang diajukan ≥ 4 hari lalu menjadi `TERVERIFIKASI` dengan `divalidasi_otomatis = 1`, `divalidasi_oleh_id = null`, dan `divalidasi_pada` terisi. Idempoten: hanya menyentuh baris berstatus `SUBMIT`.
+- Catatan dengan `selisihEvaluasi(durasi, menitEfektif) > 60` menit **dikecualikan** dan tetap menunggu keputusan atasan.
+- Notifikasi in-app dikirim ke pegawai dan pemberi pertimbangan; hasilnya masuk **waktu terverifikasi** untuk TUSI/Tusi Lainnya.
+- Pemicu: (1) cron harian `0 17 * * *` (00:00 WIB) via handler `scheduled` di `apps/api/src/worker.ts` dan `triggers.crons` di `apps/api/wrangler.jsonc`; (2) evaluasi malas di awal `GET /api/catatan` dan `GET /api/validasi`.
+- UI menampilkan status **"Disetujui otomatis"** (`labelStatus(status, otomatis)` di `apps/web/src/lib/format.ts`), dibedakan dari "Terverifikasi" di daftar catatan, kalender, dan riwayat validasi.
+- Delegasi validasi berjangka tetap **belum terpasang**; tenggat kini ditangani auto-verifikasi, bukan reminder H+2/H+3.
+
+### 27.4 Model data dan migrasi
+
+- Kolom baru `catatan_harian.divalidasi_otomatis INTEGER NOT NULL DEFAULT 0`.
+- Indeks baru `catatan_status_diajukan_idx(status, diajukan_pada)` untuk kueri tenggat.
+- Migrasi `packages/db/migrations/0002_auto_validasi_catatan.sql`; `packages/db/src/schema.ts`, `packages/db/src/schema.sql`, dan `packages/db/src/migrate.ts` diselaraskan. Total tabel tetap 19.
+
+### 27.5 Status kebutuhan yang berubah sejak rev. 1.3
+
+| Kode | Status rev. 1.4 | Catatan |
+|---|---|---|
+| FR-LG-06 | T | Tautan IKI + rencana aksi kini **wajib** untuk Tusi/Tusi Lainnya |
+| FR-LG-06c | T | Non Tusi dikecualikan dari produk/tahapan dan SKP |
+| FR-LG-13 (baru) | T | Jendela backdate maksimum 4 hari kalender |
+| FR-VL-01 | T | Tenggat validasi 4 hari menggantikan SLA 3 hari kerja yang belum terpasang |
+| FR-VL-07 | S | Notifikasi hasil + auto-verifikasi terpasang; reminder/email belum |
+| FR-VL-08 (baru) | T | Auto-verifikasi terkendali untuk catatan melewati tenggat |
+
+### 27.6 Catatan operasional
+
+- Tes `packages/schemas` menambah kasus `validasiBackdate`, `layakAutoVerifikasi`, dan `melewatiTenggatValidasi`.
+- Deploy D1 memerlukan `wrangler d1 migrations apply logbook` agar migrasi `0002` diterapkan.
+- Endpoint `GET /api/pengguna/:id/audit` mengembalikan riwayat audit akun (urut terbaru, maksimum 100 baris); belum ada layar UI yang menampilkannya.
+- Koreksi status lain terhadap §25.7: **FR-LG-05** turun menjadi **S** — `usulan_norma_waktu` diterima API dan tersimpan di `usulan_katalog.norma_waktu`, tetapi form catatan belum menyediakan inputnya.
