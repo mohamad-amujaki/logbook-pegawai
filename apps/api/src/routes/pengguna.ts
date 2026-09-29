@@ -1,6 +1,6 @@
-import { akun, akunPeran, db, hashPassword, pegawai, sesi, unitKerja } from "@logbook/db";
+import { akun, akunPeran, auditLog, db, hashPassword, pegawai, sesi, unitKerja } from "@logbook/db";
 import { daftarPeranAkunSchema, statusAkunSchema } from "@logbook/schemas";
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { adminOnly } from "../lib/authorization";
 import { catatAudit } from "../lib/audit";
@@ -68,12 +68,22 @@ export const penggunaRoutes = new Hono()
 		);
 	})
 	.get("/:id/audit", async (c) => {
-		return c.json(
-			await db
-				.select()
-				.from(auditLog)
-				.where(eq(auditLog.targetAkunId, c.req.param("id"))),
-		);
+		const rows = await db
+			.select({
+				id: auditLog.id,
+				aktorAkunId: auditLog.aktorAkunId,
+				targetAkunId: auditLog.targetAkunId,
+				aksi: auditLog.aksi,
+				alasan: auditLog.alasan,
+				sebelumJson: auditLog.sebelumJson,
+				sesudahJson: auditLog.sesudahJson,
+				createdAt: auditLog.createdAt,
+			})
+			.from(auditLog)
+			.where(eq(auditLog.targetAkunId, c.req.param("id")))
+			.orderBy(desc(auditLog.createdAt))
+			.limit(100);
+		return c.json(rows);
 	})
 	.post("/:id/reset-sandi", async (c) => {
 		const user = c.get("user");
