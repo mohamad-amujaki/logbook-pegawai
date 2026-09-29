@@ -541,6 +541,51 @@
 {/if}
 
 <form class="mx-auto mt-6 max-w-5xl space-y-8 pb-24 sm:pb-0" onsubmit={simpan}>
+	<section class="space-y-4 border-t border-border-strong pt-5">
+		<div>
+			<h2 class="text-sm font-semibold">Jenis tugas</h2>
+			<p class="mt-1 text-sm text-muted">
+				{nonTusi
+					? "Catat kegiatan di luar Tusi/SKP."
+					: "Tentukan dulu jenis pekerjaan — ini menentukan Target Kinerja dan katalog yang perlu diisi."}
+			</p>
+		</div>
+		<fieldset>
+			<legend class="sr-only">Jenis tugas</legend>
+			<div class="grid grid-cols-3 overflow-hidden rounded-md border border-border">
+				<label
+					class="flex min-h-11 cursor-pointer items-center justify-center border-r border-border px-2 text-center text-sm has-[:checked]:bg-accent-muted has-[:checked]:font-medium has-[:checked]:text-accent"
+				>
+					<input class="sr-only" type="radio" bind:group={jenisTugas} value="TUSI" />
+					Tusi
+				</label>
+				<label
+					class="flex min-h-11 cursor-pointer items-center justify-center border-r border-border px-2 text-center text-sm has-[:checked]:bg-accent-muted has-[:checked]:font-medium has-[:checked]:text-accent"
+				>
+					<input class="sr-only" type="radio" bind:group={jenisTugas} value="TUSI_LAINNYA" />
+					Tusi lainnya
+				</label>
+				<label
+					class="flex min-h-11 cursor-pointer items-center justify-center px-2 text-center text-sm has-[:checked]:bg-accent-muted has-[:checked]:font-medium has-[:checked]:text-accent"
+				>
+					<input
+						class="sr-only"
+						type="radio"
+						bind:group={jenisTugas}
+						value="NON_TUSI"
+						onchange={pilihNonTusi}
+					/>
+					Non Tusi
+				</label>
+			</div>
+		</fieldset>
+		<p class="text-xs text-muted">
+			{nonTusi
+				? 'Non Tusi tidak tertaut katalog atau SKP. Isi langsung uraian pelaksanaan dengan satuan "Kali"; catatan ini tidak menambah jam efektif.'
+				: "Tusi dan Tusi Lainnya wajib tertaut IKI, rencana aksi, serta produk/tahapan."}
+		</p>
+	</section>
+
 	{#if !nonTusi}
 		<section class="space-y-4 border-t border-border-strong pt-5">
 			<div>
@@ -608,59 +653,24 @@
 		</section>
 	{/if}
 
-	<div class="grid gap-8 border-t border-border-strong pt-5 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-x-10">
-		<section class="space-y-5">
+	<div
+		class="grid gap-8 border-t border-border-strong pt-5 {nonTusi
+			? ''
+			: 'md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-x-10'}"
+	>
+		<section class="space-y-5" hidden={nonTusi}>
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<div>
-					<h2 class="text-sm font-semibold">Jenis dan katalog</h2>
-					<p class="mt-1 text-sm text-muted">
-						{nonTusi ? "Catat kegiatan di luar Tusi/SKP." : "Tentukan sumber pekerjaan yang dicatat."}
-					</p>
+					<h2 class="text-sm font-semibold">Katalog</h2>
+					<p class="mt-1 text-sm text-muted">Tentukan sumber pekerjaan yang dicatat.</p>
 				</div>
-				{#if !nonTusi}
-					<label class="flex min-h-11 items-center gap-2 text-sm">
-						<input type="checkbox" bind:checked={isiManual} />
-						Produk belum tersedia
-					</label>
-				{/if}
+				<label class="flex min-h-11 items-center gap-2 text-sm">
+					<input type="checkbox" bind:checked={isiManual} />
+					Produk belum tersedia
+				</label>
 			</div>
 
-			<fieldset>
-				<legend class="mb-2 text-sm font-medium">Jenis tugas</legend>
-				<div class="grid grid-cols-3 overflow-hidden rounded-md border border-border">
-					<label
-						class="flex min-h-11 cursor-pointer items-center justify-center border-r border-border px-2 text-center text-sm has-[:checked]:bg-accent-muted has-[:checked]:font-medium has-[:checked]:text-accent"
-					>
-						<input class="sr-only" type="radio" bind:group={jenisTugas} value="TUSI" />
-						Tusi
-					</label>
-					<label
-						class="flex min-h-11 cursor-pointer items-center justify-center border-r border-border px-2 text-center text-sm has-[:checked]:bg-accent-muted has-[:checked]:font-medium has-[:checked]:text-accent"
-					>
-						<input class="sr-only" type="radio" bind:group={jenisTugas} value="TUSI_LAINNYA" />
-						Tusi lainnya
-					</label>
-					<label
-						class="flex min-h-11 cursor-pointer items-center justify-center px-2 text-center text-sm has-[:checked]:bg-accent-muted has-[:checked]:font-medium has-[:checked]:text-accent"
-					>
-						<input
-							class="sr-only"
-							type="radio"
-							bind:group={jenisTugas}
-							value="NON_TUSI"
-							onchange={pilihNonTusi}
-						/>
-						Non Tusi
-					</label>
-				</div>
-			</fieldset>
-
-			{#if nonTusi}
-				<p class="border-l-2 border-accent pl-4 text-xs text-muted">
-					Non Tusi tidak terhubung ke katalog atau SKP. Isi langsung uraian pelaksanaan dengan satuan
-					"Kali". Catatan Non Tusi tetap tersimpan sebagai riwayat, tetapi tidak menambah jam efektif.
-				</p>
-			{:else if isiManual}
+			{#if isiManual}
 				<div class="space-y-4 border-l-2 border-accent pl-4">
 					<p class="text-xs text-muted">Usulan ini akan ditinjau untuk ditambahkan ke katalog.</p>
 					<label class="block text-sm"
