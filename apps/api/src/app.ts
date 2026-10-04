@@ -10,11 +10,13 @@ import { meRoutes } from "./routes/me";
 import { notifikasiRoutes } from "./routes/notifikasi";
 import { penggunaRoutes } from "./routes/pengguna";
 import { skpRoutes } from "./routes/skp";
+import { kehadiranRoutes } from "./routes/kehadiran";
 import { validasiRoutes } from "./routes/validasi";
 
 export type ApiBindings = {
 	DB?: D1Database;
 	APP_ORIGIN?: string;
+	KEHADIRAN_HMAC_SECRET?: string;
 };
 
 const asalLokal = new Set(["http://localhost:5173", "http://127.0.0.1:5173"]);
@@ -45,6 +47,7 @@ app.use(
 
 app.get("/", (c) => c.json({ ok: true, layanan: "logbook-api" }));
 app.get("/health", (c) => c.json({ ok: true }));
+app.route("/integrasi/kehadiran", kehadiranRoutes);
 app.route("/auth", authRoutes);
 app.route("/me", meRoutes);
 app.route("/catatan", catatanRoutes);

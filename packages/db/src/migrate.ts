@@ -350,6 +350,24 @@ CREATE INDEX IF NOT EXISTS catatan_status_tanggal_idx ON catatan_harian(status, 
 CREATE INDEX IF NOT EXISTS catatan_status_diajukan_idx ON catatan_harian(status, diajukan_pada);
 CREATE INDEX IF NOT EXISTS pegawai_unit_tim_idx ON pegawai(unit_kerja_id, tim_kerja_id);
 CREATE UNIQUE INDEX IF NOT EXISTS skp_pegawai_tahun_unique ON skp(pegawai_id, tahun);
+CREATE TABLE IF NOT EXISTS pemetaan_email_kehadiran (
+  email TEXT PRIMARY KEY,
+  pegawai_id TEXT NOT NULL REFERENCES pegawai(id),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS integrasi_kehadiran (
+  id TEXT PRIMARY KEY,
+  kunci_idempotensi TEXT NOT NULL UNIQUE,
+  catatan_harian_id TEXT REFERENCES catatan_harian(id),
+  pegawai_id TEXT NOT NULL REFERENCES pegawai(id),
+  kode_rapat TEXT NOT NULL,
+  peserta_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'aktif',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS integrasi_kehadiran_catatan_idx ON integrasi_kehadiran(catatan_harian_id);
 `);
 
 const tanpaAkun = sqlite

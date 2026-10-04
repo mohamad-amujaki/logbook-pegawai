@@ -329,6 +329,31 @@ export const auditLog = sqliteTable(
 	(t) => [index("audit_log_target_idx").on(t.targetAkunId, t.createdAt)],
 );
 
+export const pemetaanEmailKehadiran = sqliteTable("pemetaan_email_kehadiran", {
+	email: text("email").primaryKey(),
+	pegawaiId: text("pegawai_id")
+		.notNull()
+		.references(() => pegawai.id),
+	...timestamps,
+});
+
+export const integrasiKehadiran = sqliteTable(
+	"integrasi_kehadiran",
+	{
+		id: text("id").primaryKey(),
+		kunciIdempotensi: text("kunci_idempotensi").notNull().unique(),
+		catatanHarianId: text("catatan_harian_id").references(() => catatanHarian.id),
+		pegawaiId: text("pegawai_id")
+			.notNull()
+			.references(() => pegawai.id),
+		kodeRapat: text("kode_rapat").notNull(),
+		pesertaId: text("peserta_id").notNull(),
+		status: text("status").notNull().default("aktif"),
+		...timestamps,
+	},
+	(t) => [index("integrasi_kehadiran_catatan_idx").on(t.catatanHarianId)],
+);
+
 export const schema = {
 	unitKerja,
 	timKerja,
@@ -349,4 +374,6 @@ export const schema = {
 	usulanKatalog,
 	notifikasi,
 	auditLog,
+	pemetaanEmailKehadiran,
+	integrasiKehadiran,
 };

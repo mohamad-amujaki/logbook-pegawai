@@ -26,6 +26,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 		if (cookie) headers.set("cookie", cookie);
 		const tipe = event.request.headers.get("content-type");
 		if (tipe) headers.set("content-type", tipe);
+		const stempel = event.request.headers.get("x-kehadiran-timestamp");
+		if (stempel) headers.set("x-kehadiran-timestamp", stempel);
+		const tanda = event.request.headers.get("x-kehadiran-signature");
+		if (tanda) headers.set("x-kehadiran-signature", tanda);
 		inisialisasi.headers = headers;
 		const tujuan = new URL(event.url.pathname + event.url.search, asalApi);
 		return fetch(new Request(tujuan, inisialisasi));

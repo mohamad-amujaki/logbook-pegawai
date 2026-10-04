@@ -264,3 +264,28 @@ export const uraianSkpSchema = z.object({
 });
 
 export const ikiUbahSchema = ikiSchema.omit({ rhkId: true });
+
+export const kehadiranIngestSchema = z.object({
+	action: z.enum(["checkin", "undo"]),
+	idempotencyKey: z.string().trim().min(3),
+	pesertaId: z.string().trim().min(1),
+	kodeRapat: z.string().trim().min(1),
+	nip: z
+		.string()
+		.trim()
+		.regex(/^\d{18}$/)
+		.nullable()
+		.optional(),
+	email: z.string().trim().email(),
+	nama: z.string().trim().min(1),
+	judulRapat: z.string().trim().min(1),
+	metodeKehadiran: z.string().trim().min(1),
+	tanggalMulai: z.string().min(1),
+	tanggalSelesai: z.string().nullable().optional(),
+	menitEfektif: z.number().int().nonnegative(),
+	uraian: z.string().trim().min(1),
+	output: z.number().int().positive().optional(),
+	buktiUrl: z.string().url().optional().or(z.literal("")),
+});
+
+export type KehadiranIngestInput = z.infer<typeof kehadiranIngestSchema>;

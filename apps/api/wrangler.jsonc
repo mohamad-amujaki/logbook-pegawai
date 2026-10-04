@@ -9,6 +9,9 @@
 	"triggers": {
 		"crons": ["0 17 * * *"]
 	},
+	"vars": {
+		"APP_ORIGIN": "https://logbook-pegawai.mujaki.workers.dev"
+	},
 	"d1_databases": [
 		{
 			"binding": "DB",

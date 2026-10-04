@@ -3,9 +3,9 @@
 | Atribut | Isi |
 |---|---|
 | Nama produk | Logbook Kinerja Pegawai ASN Kemenkes |
-| Versi | 1.4 |
+| Versi | 1.5 |
 | Status | Prototype produksi — sinkron dengan implementasi dan rollout |
-| Tanggal | 29 September 2026 (rev. 1.4 — Non Tusi, Backdate, dan Auto-verifikasi Validasi) |
+| Tanggal | 4 Oktober 2026 (rev. 1.5 — ingest draf dari Kehadiran Rapat) |
 | Pemilik produk | Product owner, pegawai Biro OSDM |
 | Realisasi | §27 Status implementasi produksi rev. 1.4 (kondisi kode saat ini) |
 | Sumber konsep awal | [Percakapan DeepSeek](https://chat.deepseek.com/share/v2zpxd9idx6a3kgvsz) |
@@ -1297,3 +1297,15 @@ Tambahan rev. 1.3:
 - Deploy D1 memerlukan `wrangler d1 migrations apply logbook` agar migrasi `0002` diterapkan.
 - Endpoint `GET /api/pengguna/:id/audit` mengembalikan riwayat audit akun (urut terbaru, maksimum 100 baris); belum ada layar UI yang menampilkannya.
 - Koreksi status lain terhadap §25.7: **FR-LG-05** turun menjadi **S** — `usulan_norma_waktu` diterima API dan tersimpan di `usulan_katalog.norma_waktu`, tetapi form catatan belum menyediakan inputnya.
+
+### 27.7 Ingest draf Kehadiran Rapat (rev. 1.5)
+
+Kehadiran Rapat mendorong event mesin-ke-mesin (HMAC), bukan sesi pegawai.
+
+- `POST /api/integrasi/kehadiran/checkin` dan `.../undo`.
+- Header `X-Kehadiran-Timestamp` + `X-Kehadiran-Signature` = hex HMAC-SHA256(`timestamp.body`) dengan secret `KEHADIRAN_HMAC_SECRET`.
+- Identitas: NIP 18 digit di master `pegawai`; cadangan `pemetaan_email_kehadiran`.
+- Check-in membuat catatan `DRAFT` jenis Tusi Lainnya (isi manual, tanpa IKI). Jam efektif tetap 0 sampai pegawai lengkapi IKI dan catatan diverifikasi.
+- Idempotensi: `integrasi_kehadiran.kunci_idempotensi`.
+- Undo: hapus jika masih `DRAFT`; jika `SUBMIT`/`TERVERIFIKASI` hanya ditandai kehadiran dibatalkan.
+- Migrasi `packages/db/migrations/0003_integrasi_kehadiran.sql`.
