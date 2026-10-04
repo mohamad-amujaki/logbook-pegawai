@@ -19,3 +19,20 @@ export async function catatAudit(
 		createdAt: new Date().toISOString(),
 	});
 }
+
+export async function catatAuditSistem(
+	aksi: string,
+	opsi: { alasan?: string; sesudah?: unknown; requestId?: string } = {},
+) {
+	await db.insert(auditLog).values({
+		id: buatId("audit"),
+		aktorAkunId: null,
+		targetAkunId: null,
+		aksi,
+		alasan: opsi.alasan,
+		sebelumJson: null,
+		sesudahJson: opsi.sesudah === undefined ? null : JSON.stringify(opsi.sesudah),
+		requestId: opsi.requestId ?? null,
+		createdAt: new Date().toISOString(),
+	});
+}

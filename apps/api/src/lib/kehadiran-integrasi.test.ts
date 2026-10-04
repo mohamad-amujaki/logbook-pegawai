@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { bangunIsianDraf, putuskanUndo, tentukanKodePegawai } from "./kehadiran-integrasi";
-import type { KehadiranIngestInput } from "@logbook/schemas";
+import { adalahCatatanKehadiran, type KehadiranIngestInput } from "@logbook/schemas";
 
 const pegawaiAktif = {
 	id: "pg1",
@@ -68,6 +68,26 @@ describe("tentukanKodePegawai", () => {
 		});
 		expect(hasil).toMatchObject({ ok: false, code: "NIP_REQUIRED" });
 	});
+
+	it("menolak bila NIP dan email merujuk pegawai berbeda", () => {
+		const hasil = tentukanKodePegawai({
+			nip: pegawaiAktif.nip,
+			email: "lain@example.test",
+			lewatNip: pegawaiAktif,
+			lewatEmail: { ...pegawaiAktif, id: "pg2", nip: "198001012000011111" },
+		});
+		expect(hasil).toMatchObject({ ok: false, code: "IDENTITAS_BENTROK" });
+	});
+
+	it("menerima bila NIP dan email merujuk pegawai yang sama", () => {
+		const hasil = tentukanKodePegawai({
+			nip: pegawaiAktif.nip,
+			email: "asn@example.test",
+			lewatNip: pegawaiAktif,
+			lewatEmail: pegawaiAktif,
+		});
+		expect(hasil.ok).toBe(true);
+	});
 });
 
 describe("bangunIsianDraf", () => {
@@ -75,9 +95,13 @@ describe("bangunIsianDraf", () => {
 		const isian = bangunIsianDraf(payload);
 		expect(isian.jenisTugas).toBe("TUSI_LAINNYA");
 		expect(isian.isiManual).toBe(true);
+		expect(isian.namaManualProduk).toBe("Kehadiran Rapat");
+		expect(isian.namaManualTahapan).toBe("Otomatis");
 		expect(isian.menitEfektif).toBe(90);
 		expect(isian.tanggal).toBe("2026-10-02");
 		expect(isian.satuanOutput).toBe("rapat");
+		expect(adalahCatatanKehadiran(isian)).toBe(true);
+		expect(adalahCatatanKehadiran({ isiManual: true, namaManualProduk: "Kehadiran rapat" })).toBe(true);
 	});
 });
 
@@ -85,7 +109,8 @@ describe("putuskanUndo", () => {
 	it("mencabut draf dan menandai catatan yang sudah diajukan", () => {
 		expect(putuskanUndo("DRAFT")).toBe("hapus_draf");
 		expect(putuskanUndo("SUBMIT")).toBe("tandai");
-		expect(putuskanUndo("TERVERIFIKASI")).toBe("tandai");
+		expect(putuskanUndo("DITOLAK")).toBe("tandai");
+		expect(putuskanUndo("TERVERIFIKASI")).toBe("cabut_integrasi");
 		expect(putuskanUndo(null)).toBe("abaikan");
 	});
 });

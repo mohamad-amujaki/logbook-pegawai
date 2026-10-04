@@ -10,6 +10,7 @@ import { meRoutes } from "./routes/me";
 import { notifikasiRoutes } from "./routes/notifikasi";
 import { penggunaRoutes } from "./routes/pengguna";
 import { skpRoutes } from "./routes/skp";
+import { asalCorsDiizinkan } from "./lib/cors";
 import { kehadiranRoutes } from "./routes/kehadiran";
 import { validasiRoutes } from "./routes/validasi";
 
@@ -19,13 +20,6 @@ export type ApiBindings = {
 	KEHADIRAN_HMAC_SECRET?: string;
 };
 
-const asalLokal = new Set(["http://localhost:5173", "http://127.0.0.1:5173"]);
-
-function asalDiizinkan(asal: string, cadangan?: string): string {
-	if (asalLokal.has(asal) || asal.endsWith(".workers.dev")) return asal;
-	if (cadangan) return cadangan;
-	return "http://localhost:5173";
-}
 
 export const app = new Hono<{ Bindings: ApiBindings }>().basePath("/api");
 
@@ -40,7 +34,7 @@ app.use("*", async (c, next) => {
 app.use(
 	"*",
 	cors({
-		origin: (asal, c) => asalDiizinkan(asal ?? "", c.env?.APP_ORIGIN),
+		origin: (asal, c) => asalCorsDiizinkan(asal ?? "", c.env?.APP_ORIGIN),
 		credentials: true,
 	}),
 );

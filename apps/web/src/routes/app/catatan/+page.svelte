@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { api, ApiError } from "$lib/api";
+	import { adalahCatatanKehadiran, NAMA_PRODUK_KEHADIRAN, NAMA_TAHAPAN_KEHADIRAN } from "@logbook/schemas";
 	import { jamRentang, labelJenis, labelStatus, menitKeJam } from "$lib/format";
 	import NavigasiCatatan from "$lib/NavigasiCatatan.svelte";
 	import PanelFokus from "$lib/PanelFokus.svelte";
@@ -20,6 +21,8 @@
 			menitEfektif: number;
 			status: string;
 			isiManual: boolean;
+			namaManualProduk: string | null;
+			namaManualTahapan: string | null;
 			divalidasiOtomatis: boolean;
 			produkId: string | null;
 			catatanValidasi: string | null;
@@ -87,7 +90,9 @@
 				cari &&
 				!r.catatan.uraian.toLocaleLowerCase("id").includes(cari) &&
 				!(r.produkNama ?? "").toLocaleLowerCase("id").includes(cari) &&
-				!(r.tahapanNama ?? "").toLocaleLowerCase("id").includes(cari)
+				!(r.tahapanNama ?? "").toLocaleLowerCase("id").includes(cari) &&
+				!(r.catatan.namaManualProduk ?? "").toLocaleLowerCase("id").includes(cari) &&
+				!(r.catatan.namaManualTahapan ?? "").toLocaleLowerCase("id").includes(cari)
 			)
 				return false;
 			return true;
@@ -433,7 +438,9 @@
 					</td>
 					<td class="border-b border-border px-3 py-3">{labelJenis(r.catatan.jenisTugas)}</td>
 					<td class="border-b border-border px-3 py-3">
-						{#if r.catatan.isiManual}
+						{#if adalahCatatanKehadiran(r.catatan)}
+							{NAMA_PRODUK_KEHADIRAN} / {NAMA_TAHAPAN_KEHADIRAN}
+						{:else if r.catatan.isiManual}
 							Isi manual
 						{:else if r.produkNama || r.tahapanNama}
 							{r.produkNama ?? "—"} / {r.tahapanNama ?? "—"}

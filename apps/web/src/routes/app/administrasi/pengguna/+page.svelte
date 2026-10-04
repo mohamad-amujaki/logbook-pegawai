@@ -55,7 +55,9 @@
 	const hasil = $derived.by(() => {
 		const q = kata.trim().toLowerCase();
 		return pengguna.filter((p) => {
-			if (status && p.status !== status) return false;
+			if (status === "WAJIB_GANTI") {
+				if (p.status !== "AKTIF" || !p.wajibGantiSandi) return false;
+			} else if (status && p.status !== status) return false;
 			if (unitId && p.unitKerjaId !== unitId) return false;
 			if (peran && !p.peran.some((r) => r.peran === peran)) return false;
 			if (!q) return true;
@@ -246,6 +248,7 @@
 		<select id="pengguna-status" class="mt-1 min-h-11 w-full rounded-md border border-border px-3" bind:value={status}>
 			<option value="">Semua status</option>
 			<option value="AKTIF">Aktif</option>
+			<option value="WAJIB_GANTI">Wajib ganti sandi</option>
 			<option value="DITANGGUHKAN">Ditangguhkan</option>
 		</select>
 	</div>

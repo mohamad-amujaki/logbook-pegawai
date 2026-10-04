@@ -368,6 +368,12 @@ CREATE TABLE IF NOT EXISTS integrasi_kehadiran (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS integrasi_kehadiran_catatan_idx ON integrasi_kehadiran(catatan_harian_id);
+CREATE TABLE IF NOT EXISTS login_percobaan (
+  id TEXT PRIMARY KEY,
+  kunci TEXT NOT NULL,
+  terjadi_pada TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS login_percobaan_kunci_idx ON login_percobaan(kunci, terjadi_pada);
 `);
 
 const tanpaAkun = sqlite

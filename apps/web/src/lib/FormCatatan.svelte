@@ -4,7 +4,14 @@
 	import { page } from "$app/state";
 	import { api, ApiError } from "$lib/api";
 	import PilihKatalog, { type OpsiKatalog } from "$lib/PilihKatalog.svelte";
-	import { BATAS_HARI_BACKDATE, validasiBackdate, validasiWaktu, type JenisIki } from "@logbook/schemas";
+	import {
+		BATAS_HARI_BACKDATE,
+		NAMA_PRODUK_KEHADIRAN,
+		NAMA_TAHAPAN_KEHADIRAN,
+		validasiBackdate,
+		validasiWaktu,
+		type JenisIki,
+	} from "@logbook/schemas";
 
 	let { id = "" }: { id?: string } = $props();
 
@@ -93,6 +100,7 @@
 	let kategori = $state<"BIASA" | "PERLU_DISKUSI">("BIASA");
 	let buktiUrl = $state("");
 	let alasanTolak = $state("");
+	let sumberKehadiran = $state(false);
 	let error = $state("");
 	let errorPin = $state("");
 	let peringatan = $state("");
@@ -337,6 +345,7 @@
 				buktiUrl: string | null;
 				status: string;
 				catatanValidasi: string | null;
+				sumberKehadiran?: boolean;
 			}>(`/catatan/${id}`);
 			if (row.status === "TERVERIFIKASI" || row.status === "SUBMIT") {
 				error = "Catatan ini tidak dapat diubah.";
@@ -349,8 +358,9 @@
 			produkId = row.produkId ?? "";
 			tahapanId = row.tahapanId ?? "";
 			aktivitasId = row.aktivitasId ?? "";
-			namaManualProduk = row.namaManualProduk ?? "";
-			namaManualTahapan = row.namaManualTahapan ?? "";
+			sumberKehadiran = row.sumberKehadiran === true;
+			namaManualProduk = sumberKehadiran ? NAMA_PRODUK_KEHADIRAN : (row.namaManualProduk ?? "");
+			namaManualTahapan = sumberKehadiran ? NAMA_TAHAPAN_KEHADIRAN : (row.namaManualTahapan ?? "");
 			uraian = row.uraian;
 			waktuMulai = keInputWaktu(row.waktuMulai);
 			waktuSelesai = keInputWaktu(row.waktuSelesai);
@@ -504,8 +514,8 @@
 					produkId: nonTusi ? undefined : produkId || undefined,
 					tahapanId: nonTusi ? undefined : tahapanId || undefined,
 					aktivitasId: nonTusi ? undefined : aktivitasId || undefined,
-					namaManualProduk: nonTusi ? "" : namaManualProduk,
-					namaManualTahapan: nonTusi ? "" : namaManualTahapan,
+					namaManualProduk: nonTusi ? "" : sumberKehadiran ? NAMA_PRODUK_KEHADIRAN : namaManualProduk,
+					namaManualTahapan: nonTusi ? "" : sumberKehadiran ? NAMA_TAHAPAN_KEHADIRAN : namaManualTahapan,
 					uraian,
 					waktuMulai,
 					waktuSelesai,
@@ -528,7 +538,13 @@
 	<a class="inline-flex min-h-11 items-center text-sm text-accent" href="/app/catatan">← Kembali ke catatan</a>
 	<h1 class="mt-1 text-xl font-semibold">{id ? "Ubah catatan" : "Catatan baru"}</h1>
 	<p class="mt-1 text-sm text-muted">
-		{id ? "Perbarui catatan sesuai arahan atasan." : "Catat pekerjaan dan output yang diselesaikan."}
+		{#if sumberKehadiran}
+			Jadwal rapat diambil dari portal Kehadiran Rapat. Pilih jenis tugas, lengkapi isian, lalu sesuaikan waktu efektif bila perlu.
+		{:else if id}
+			Perbarui catatan sesuai arahan atasan.
+		{:else}
+			Catat pekerjaan dan output yang diselesaikan.
+		{/if}
 	</p>
 </div>
 
@@ -568,13 +584,7 @@
 				<label
 					class="flex min-h-11 cursor-pointer items-center justify-center px-2 text-center text-sm has-[:checked]:bg-accent-muted has-[:checked]:font-medium has-[:checked]:text-accent"
 				>
-					<input
-						class="sr-only"
-						type="radio"
-						bind:group={jenisTugas}
-						value="NON_TUSI"
-						onchange={pilihNonTusi}
-					/>
+					<input class="sr-only" type="radio" bind:group={jenisTugas} value="NON_TUSI" onchange={pilihNonTusi} />
 					Non Tusi
 				</label>
 			</div>
@@ -664,13 +674,29 @@
 					<h2 class="text-sm font-semibold">Katalog</h2>
 					<p class="mt-1 text-sm text-muted">Tentukan sumber pekerjaan yang dicatat.</p>
 				</div>
-				<label class="flex min-h-11 items-center gap-2 text-sm">
-					<input type="checkbox" bind:checked={isiManual} />
-					Produk belum tersedia
-				</label>
+				{#if !sumberKehadiran}
+					<label class="flex min-h-11 items-center gap-2 text-sm">
+						<input type="checkbox" bind:checked={isiManual} />
+						Produk belum tersedia
+					</label>
+				{/if}
 			</div>
 
-			{#if isiManual}
+			{#if sumberKehadiran}
+				<div class="space-y-3 border-l-2 border-accent pl-4">
+					<p class="text-xs text-muted">Produk dan tahapan ditetapkan otomatis dari portal Kehadiran Rapat.</p>
+					<dl class="grid gap-3 text-sm sm:grid-cols-2">
+						<div>
+							<dt class="text-xs font-medium uppercase tracking-wide text-muted">Produk</dt>
+							<dd class="mt-1">{NAMA_PRODUK_KEHADIRAN}</dd>
+						</div>
+						<div>
+							<dt class="text-xs font-medium uppercase tracking-wide text-muted">Tahapan</dt>
+							<dd class="mt-1">{NAMA_TAHAPAN_KEHADIRAN}</dd>
+						</div>
+					</dl>
+				</div>
+			{:else if isiManual}
 				<div class="space-y-4 border-l-2 border-accent pl-4">
 					<p class="text-xs text-muted">Usulan ini akan ditinjau untuk ditambahkan ke katalog.</p>
 					<label class="block text-sm"
@@ -782,25 +808,31 @@
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 				<label class="block min-w-0 text-sm"
 					>Mulai <span class="text-muted">(wajib)</span><input
-						class="mt-1 min-h-11 w-full min-w-0 rounded-md border border-border px-3 py-2 text-sm"
+						class="mt-1 min-h-11 w-full min-w-0 rounded-md border border-border px-3 py-2 text-sm disabled:bg-surface-alt disabled:text-muted"
 						type="datetime-local"
-						min={id ? undefined : batasAwal}
-						max={batasAkhir}
+						min={id || sumberKehadiran ? undefined : batasAwal}
+						max={sumberKehadiran ? undefined : batasAkhir}
+						disabled={sumberKehadiran}
 						bind:value={waktuMulai}
 					/></label
 				>
 				<label class="block min-w-0 text-sm"
 					>Selesai <span class="text-muted">(wajib)</span><input
-						class="mt-1 min-h-11 w-full min-w-0 rounded-md border border-border px-3 py-2 text-sm"
+						class="mt-1 min-h-11 w-full min-w-0 rounded-md border border-border px-3 py-2 text-sm disabled:bg-surface-alt disabled:text-muted"
 						type="datetime-local"
-						min={id ? undefined : batasAwal}
-						max={batasAkhir}
+						min={id || sumberKehadiran ? undefined : batasAwal}
+						max={sumberKehadiran ? undefined : batasAkhir}
+						disabled={sumberKehadiran}
 						bind:value={waktuSelesai}
 					/></label
 				>
 			</div>
 			<p class="text-xs text-muted">
-				Catatan bisa diisi untuk {BATAS_HARI_BACKDATE} hari terakhir sampai hari ini.
+				{#if sumberKehadiran}
+					Tanggal dan jam mulai–selesai tidak dapat diubah karena bersumber dari portal Kehadiran Rapat.
+				{:else}
+					Catatan bisa diisi untuk {BATAS_HARI_BACKDATE} hari terakhir sampai hari ini.
+				{/if}
 			</p>
 			<label class="block text-sm"
 				>Waktu efektif (menit) <span class="text-muted">(wajib)</span><input
@@ -808,14 +840,23 @@
 					type="number"
 					min="1"
 					max={durasiKalender || undefined}
-					oninput={() => (menitManual = true)}
+					oninput={() => {
+						menitManual = true;
+						const n = Number(menitEfektif);
+						if (durasiKalender > 0 && n > durasiKalender) menitEfektif = durasiKalender;
+					}}
 					bind:value={menitEfektif}
 				/></label
 			>
 			{#if durasiKalender > 0}
 				<p class="text-xs text-muted" aria-live="polite">
-					Otomatis dari durasi (selesai − mulai), boleh dikurangi. Maksimal {durasiKalender} menit —
-					saat ini {labelDurasi(Number(menitEfektif) || 0)}.
+					{#if sumberKehadiran}
+						Boleh diubah, maksimal selisih selesai dan mulai rapat ({durasiKalender} menit). Saat ini
+						{labelDurasi(Number(menitEfektif) || 0)}.
+					{:else}
+						Otomatis dari durasi (selesai − mulai), boleh dikurangi. Maksimal {durasiKalender} menit —
+						saat ini {labelDurasi(Number(menitEfektif) || 0)}.
+					{/if}
 				</p>
 			{/if}
 			<div class="grid grid-cols-2 gap-3">

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { api, ApiError } from "$lib/api";
+	import { adalahCatatanKehadiran, NAMA_PRODUK_KEHADIRAN, NAMA_TAHAPAN_KEHADIRAN } from "@logbook/schemas";
 	import { jamRentang, labelJenis, labelKategori, labelStatus, menitKeJam } from "$lib/format";
 	import PageHeader from "$lib/PageHeader.svelte";
 	import PanelFokus from "$lib/PanelFokus.svelte";
@@ -160,6 +161,9 @@
 	}
 
 	function labelKatalog(b: Baris): string {
+		if (adalahCatatanKehadiran(b)) {
+			return `${NAMA_PRODUK_KEHADIRAN} / ${NAMA_TAHAPAN_KEHADIRAN}`;
+		}
 		if (b.isiManual) {
 			const nama = [b.namaManualProduk, b.namaManualTahapan].filter(Boolean).join(" / ");
 			return nama ? `Isi manual — ${nama}` : "Isi manual";

@@ -20,6 +20,7 @@ export const loginSchema = z.object({
 
 export const gantiSandiSchema = z
 	.object({
+		sandiLama: z.string().optional(),
 		sandiBaru: z.string().min(8, "Kata sandi baru minimal 8 karakter."),
 		ulangiSandi: z.string().min(1, "Ulangi sandi wajib diisi."),
 	})
@@ -289,3 +290,14 @@ export const kehadiranIngestSchema = z.object({
 });
 
 export type KehadiranIngestInput = z.infer<typeof kehadiranIngestSchema>;
+
+export const NAMA_PRODUK_KEHADIRAN = "Kehadiran Rapat";
+export const NAMA_TAHAPAN_KEHADIRAN = "Otomatis";
+
+export function adalahCatatanKehadiran(row: {
+	isiManual?: boolean | null;
+	namaManualProduk?: string | null;
+}): boolean {
+	if (!row.isiManual) return false;
+	return row.namaManualProduk?.trim().toLowerCase() === "kehadiran rapat";
+}

@@ -195,8 +195,11 @@
 									<p class="text-xs text-muted">{me.atasanPejabatPenilai.jabatan}</p>
 								{/if}
 
-								<div class="mt-4 flex items-center justify-between border-t border-border pt-3">
-									<a class="text-sm text-accent" href="/app/skp?ubah=1">Ubah atasan</a>
+								<div class="mt-4 space-y-2 border-t border-border pt-3">
+									<div class="flex items-center justify-between">
+										<a class="text-sm text-accent" href="/app/skp?ubah=1">Ubah atasan</a>
+										<a class="text-sm text-accent" href="/ganti-sandi">Ganti sandi</a>
+									</div>
 									<button class="text-sm text-accent" onclick={keluar} type="button">Keluar</button>
 								</div>
 							</div>

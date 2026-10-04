@@ -7,17 +7,40 @@ import {
 } from "@logbook/db";
 import {
 	durasiKalenderMenit,
+	NAMA_PRODUK_KEHADIRAN,
+	NAMA_TAHAPAN_KEHADIRAN,
 	tanggalWib,
 	validasiWaktu,
 	type KehadiranIngestInput,
 } from "@logbook/schemas";
 import { eq } from "drizzle-orm";
+import { catatAuditSistem } from "./audit";
 import { buatId } from "./id";
 import { kirimNotifikasi } from "./notify";
 
+async function auditKehadiran(
+	aksi: string,
+	input: KehadiranIngestInput,
+	hasil: { status: string; http: number; pegawaiId?: string },
+) {
+	try {
+		await catatAuditSistem(aksi, {
+			alasan: input.idempotencyKey,
+			sesudah: {
+				pegawaiId: hasil.pegawaiId ?? null,
+				kodeRapat: input.kodeRapat,
+				status: hasil.status,
+				http: hasil.http,
+			},
+		});
+	} catch {
+		// Integrasi tetap jalan meski audit gagal.
+	}
+}
+
 export type HasilPegawai =
 	| { ok: true; pegawai: typeof pegawai.$inferSelect }
-	| { ok: false; code: "NIP_REQUIRED" | "PEGAWAI_NOT_FOUND"; pesan: string };
+	| { ok: false; code: "NIP_REQUIRED" | "PEGAWAI_NOT_FOUND" | "IDENTITAS_BENTROK"; pesan: string };
 
 export function tentukanKodePegawai(input: {
 	nip?: string | null;
@@ -25,6 +48,13 @@ export function tentukanKodePegawai(input: {
 	lewatNip: typeof pegawai.$inferSelect | undefined;
 	lewatEmail: typeof pegawai.$inferSelect | undefined;
 }): HasilPegawai {
+	if (input.lewatNip && input.lewatEmail && input.lewatNip.id !== input.lewatEmail.id) {
+		return {
+			ok: false,
+			code: "IDENTITAS_BENTROK",
+			pesan: "NIP dan email tidak merujuk pegawai yang sama.",
+		};
+	}
 	if (input.lewatNip) {
 		if (input.lewatNip.status !== "aktif") {
 			return {
@@ -74,8 +104,8 @@ export function bangunIsianDraf(input: KehadiranIngestInput) {
 	return {
 		jenisTugas: "TUSI_LAINNYA" as const,
 		isiManual: true,
-		namaManualProduk: "Kehadiran rapat",
-		namaManualTahapan: input.kodeRapat,
+		namaManualProduk: NAMA_PRODUK_KEHADIRAN,
+		namaManualTahapan: NAMA_TAHAPAN_KEHADIRAN,
 		uraian: input.uraian,
 		waktuMulai: input.tanggalMulai,
 		waktuSelesai: selesai,
@@ -89,19 +119,35 @@ export function bangunIsianDraf(input: KehadiranIngestInput) {
 	};
 }
 
-export function putuskanUndo(statusCatatan: string | null): "hapus_draf" | "tandai" | "abaikan" {
+export function putuskanUndo(
+	statusCatatan: string | null,
+): "hapus_draf" | "tandai" | "cabut_integrasi" | "abaikan" {
 	switch (statusCatatan) {
 		case "DRAFT":
 			return "hapus_draf";
 		case "SUBMIT":
-		case "TERVERIFIKASI":
 		case "DITOLAK":
 			return "tandai";
+		case "TERVERIFIKASI":
+			return "cabut_integrasi";
 		case null:
 			return "abaikan";
 		default:
 			return "abaikan";
 	}
+}
+
+function gagalIdentitas(hasil: Extract<HasilPegawai, { ok: false }>) {
+	if (hasil.code === "IDENTITAS_BENTROK") {
+		return {
+			http: 409 as const,
+			body: { status: "ditolak" as const, code: hasil.code, pesan: hasil.pesan },
+		};
+	}
+	return {
+		http: 404 as const,
+		body: { status: "perlu_nip" as const, code: hasil.code, pesan: hasil.pesan },
+	};
 }
 
 async function cariPegawai(input: KehadiranIngestInput): Promise<HasilPegawai> {
@@ -130,10 +176,9 @@ function draftUrl(asalAplikasi: string, catatanId: string) {
 export async function prosesCheckinKehadiran(input: KehadiranIngestInput, asalAplikasi: string) {
 	const identitas = await cariPegawai(input);
 	if (!identitas.ok) {
-		return {
-			http: 404 as const,
-			body: { status: "perlu_nip", code: identitas.code, pesan: identitas.pesan },
-		};
+		const gagal = gagalIdentitas(identitas);
+		await auditKehadiran("kehadiran.checkin", input, { status: gagal.body.status, http: gagal.http });
+		return gagal;
 	}
 
 	const isian = bangunIsianDraf(input);
@@ -150,15 +195,37 @@ export async function prosesCheckinKehadiran(input: KehadiranIngestInput, asalAp
 			.limit(1)
 	)[0];
 
+	if (existing && existing.pegawaiId !== identitas.pegawai.id) {
+		const hasil = {
+			http: 409 as const,
+			body: {
+				status: "ditolak" as const,
+				pesan: "Kunci idempotensi sudah terpakai untuk pegawai lain.",
+			},
+		};
+		await auditKehadiran("kehadiran.checkin", input, {
+			status: hasil.body.status,
+			http: hasil.http,
+			pegawaiId: identitas.pegawai.id,
+		});
+		return hasil;
+	}
+
 	if (existing?.status === "aktif" && existing.catatanHarianId) {
-		return {
+		const hasil = {
 			http: 200 as const,
 			body: {
-				status: "disiapkan",
+				status: "disiapkan" as const,
 				draftUrl: draftUrl(asalAplikasi, existing.catatanHarianId),
 				pesan: "Draf logbook kinerja sudah disiapkan.",
 			},
 		};
+		await auditKehadiran("kehadiran.checkin", input, {
+			status: hasil.body.status,
+			http: hasil.http,
+			pegawaiId: identitas.pegawai.id,
+		});
+		return hasil;
 	}
 
 	const now = new Date().toISOString();
@@ -215,14 +282,20 @@ export async function prosesCheckinKehadiran(input: KehadiranIngestInput, asalAp
 		// Draf tetap sah meski notifikasi gagal.
 	}
 
-	return {
+	const hasil = {
 		http: 200 as const,
 		body: {
-			status: "disiapkan",
+			status: "disiapkan" as const,
 			draftUrl: draftUrl(asalAplikasi, catatanId),
 			pesan: "Draf logbook kinerja sudah disiapkan.",
 		},
 	};
+	await auditKehadiran("kehadiran.checkin", input, {
+		status: hasil.body.status,
+		http: hasil.http,
+		pegawaiId: identitas.pegawai.id,
+	});
+	return hasil;
 }
 
 export async function prosesUndoKehadiran(input: KehadiranIngestInput) {
@@ -240,6 +313,28 @@ export async function prosesUndoKehadiran(input: KehadiranIngestInput) {
 		};
 	}
 
+	const identitas = await cariPegawai(input);
+	if (!identitas.ok) {
+		const gagal = gagalIdentitas(identitas);
+		await auditKehadiran("kehadiran.undo", input, { status: gagal.body.status, http: gagal.http });
+		return gagal;
+	}
+	if (identitas.pegawai.id !== existing.pegawaiId) {
+		const hasil = {
+			http: 409 as const,
+			body: {
+				status: "ditolak" as const,
+				pesan: "Undo kehadiran tidak cocok dengan pegawai pada draf tersebut.",
+			},
+		};
+		await auditKehadiran("kehadiran.undo", input, {
+			status: hasil.body.status,
+			http: hasil.http,
+			pegawaiId: identitas.pegawai.id,
+		});
+		return hasil;
+	}
+
 	const catatan = existing.catatanHarianId
 		? (
 				await db
@@ -251,6 +346,14 @@ export async function prosesUndoKehadiran(input: KehadiranIngestInput) {
 		: undefined;
 	const aksi = putuskanUndo(catatan?.status ?? null);
 	const now = new Date().toISOString();
+	const selesaiUndo = async <T extends { http: number; body: { status: string } }>(hasil: T) => {
+		await auditKehadiran("kehadiran.undo", input, {
+			status: hasil.body.status,
+			http: hasil.http,
+			pegawaiId: existing.pegawaiId,
+		});
+		return hasil;
+	};
 
 	if (aksi === "hapus_draf" && catatan) {
 		await db
@@ -258,10 +361,10 @@ export async function prosesUndoKehadiran(input: KehadiranIngestInput) {
 			.set({ catatanHarianId: null, status: "dicabut", updatedAt: now })
 			.where(eq(integrasiKehadiran.id, existing.id));
 		await db.delete(catatanHarian).where(eq(catatanHarian.id, catatan.id));
-		return {
+		return selesaiUndo({
 			http: 200 as const,
 			body: { status: "disiapkan", pesan: "Draf logbook dari kehadiran telah dicabut." },
-		};
+		});
 	}
 
 	if (aksi === "tandai" && catatan) {
@@ -269,7 +372,7 @@ export async function prosesUndoKehadiran(input: KehadiranIngestInput) {
 			.update(catatanHarian)
 			.set({
 				catatanValidasi:
-					"Kehadiran pada sistem Kehadiran Rapat dibatalkan. Catatan ini tidak dihapus karena sudah diajukan atau diverifikasi.",
+					"Kehadiran pada sistem Kehadiran Rapat dibatalkan. Catatan ini tidak dihapus karena sudah diajukan.",
 				updatedAt: now,
 			})
 			.where(eq(catatanHarian.id, catatan.id));
@@ -277,21 +380,45 @@ export async function prosesUndoKehadiran(input: KehadiranIngestInput) {
 			.update(integrasiKehadiran)
 			.set({ status: "dicabut", updatedAt: now })
 			.where(eq(integrasiKehadiran.id, existing.id));
-		return {
+		return selesaiUndo({
 			http: 200 as const,
 			body: {
 				status: "disiapkan",
-				pesan: "Catatan logbook tetap ada karena sudah diajukan atau diverifikasi.",
+				pesan: "Catatan logbook tetap ada karena sudah diajukan.",
 			},
-		};
+		});
+	}
+
+	if (aksi === "cabut_integrasi") {
+		await db
+			.update(integrasiKehadiran)
+			.set({ status: "dicabut", updatedAt: now })
+			.where(eq(integrasiKehadiran.id, existing.id));
+		try {
+			await kirimNotifikasi({
+				pegawaiId: existing.pegawaiId,
+				judul: "Kehadiran rapat dibatalkan",
+				isi: "Kehadiran pada portal Kehadiran Rapat dibatalkan. Catatan yang sudah diverifikasi tidak diubah.",
+				tautan: catatan ? `/app/catatan/${catatan.id}` : "/app/catatan",
+			});
+		} catch {
+			// Cabut integrasi tetap sah meski notifikasi gagal.
+		}
+		return selesaiUndo({
+			http: 200 as const,
+			body: {
+				status: "dilewati",
+				pesan: "Catatan terverifikasi tidak diubah. Tautan kehadiran dicabut.",
+			},
+		});
 	}
 
 	await db
 		.update(integrasiKehadiran)
 		.set({ status: "dicabut", updatedAt: now })
 		.where(eq(integrasiKehadiran.id, existing.id));
-	return {
+	return selesaiUndo({
 		http: 200 as const,
 		body: { status: "dilewati", pesan: "Tidak ada draf kehadiran yang perlu dicabut." },
-	};
+	});
 }

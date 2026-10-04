@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { api, ApiError } from "$lib/api";
+	import { adalahCatatanKehadiran, NAMA_PRODUK_KEHADIRAN, NAMA_TAHAPAN_KEHADIRAN } from "@logbook/schemas";
 	import { labelJenis, labelStatus, menitKeJam } from "$lib/format";
 	import NavigasiCatatan from "$lib/NavigasiCatatan.svelte";
 	import PanelFokus from "$lib/PanelFokus.svelte";
@@ -16,6 +17,7 @@
 			status: string;
 			jenisTugas: string;
 			isiManual: boolean;
+			namaManualProduk: string | null;
 			divalidasiOtomatis: boolean;
 			menitEfektif: number;
 			jumlahOutput: number;
@@ -637,7 +639,14 @@
 				</div>
 				<div class="col-span-2">
 					<dt class="text-xs text-muted">Katalog</dt>
-					<dd>{[detail.produkNama, detail.tahapanNama, detail.aktivitasNama].filter(Boolean).join(" / ") || (detail.catatan.isiManual ? "Isi manual" : "—")}</dd>
+					<dd>
+						{#if adalahCatatanKehadiran(detail.catatan)}
+							{NAMA_PRODUK_KEHADIRAN} / {NAMA_TAHAPAN_KEHADIRAN}
+						{:else}
+							{[detail.produkNama, detail.tahapanNama, detail.aktivitasNama].filter(Boolean).join(" / ") ||
+								(detail.catatan.isiManual ? "Isi manual" : "—")}
+						{/if}
+					</dd>
 				</div>
 				<div>
 					<dt class="text-xs text-muted">Waktu efektif</dt>

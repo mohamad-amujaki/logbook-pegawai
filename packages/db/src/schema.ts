@@ -329,6 +329,16 @@ export const auditLog = sqliteTable(
 	(t) => [index("audit_log_target_idx").on(t.targetAkunId, t.createdAt)],
 );
 
+export const loginPercobaan = sqliteTable(
+	"login_percobaan",
+	{
+		id: text("id").primaryKey(),
+		kunci: text("kunci").notNull(),
+		terjadiPada: text("terjadi_pada").notNull(),
+	},
+	(t) => [index("login_percobaan_kunci_idx").on(t.kunci, t.terjadiPada)],
+);
+
 export const pemetaanEmailKehadiran = sqliteTable("pemetaan_email_kehadiran", {
 	email: text("email").primaryKey(),
 	pegawaiId: text("pegawai_id")
@@ -374,6 +384,7 @@ export const schema = {
 	usulanKatalog,
 	notifikasi,
 	auditLog,
+	loginPercobaan,
 	pemetaanEmailKehadiran,
 	integrasiKehadiran,
 };

@@ -1,17 +1,36 @@
 <script lang="ts">
+	import { onMount } from "svelte";
 	import { goto } from "$app/navigation";
 	import { gantiSandiSchema } from "@logbook/schemas";
-	import { ApiError, api } from "$lib/api";
+	import { ApiError, api, type Me } from "$lib/api";
 
+	let wajibGanti = $state(true);
+	let sandiLama = $state("");
 	let sandiBaru = $state("");
 	let ulangiSandi = $state("");
 	let error = $state("");
+	let errorSandiLama = $state("");
 	let errorSandiBaru = $state("");
 	let errorUlangi = $state("");
 	let loading = $state(false);
 
+	let elSandiLama = $state<HTMLInputElement | null>(null);
 	let elSandiBaru = $state<HTMLInputElement | null>(null);
 	let elUlangi = $state<HTMLInputElement | null>(null);
+
+	onMount(async () => {
+		try {
+			const me = await api<Me>("/me");
+			wajibGanti = me.user.wajibGantiSandi;
+		} catch {
+			await goto("/login");
+		}
+	});
+
+	function padaSandiLama() {
+		errorSandiLama = "";
+		error = "";
+	}
 
 	function padaSandiBaru() {
 		errorSandiBaru = "";
@@ -27,16 +46,23 @@
 		e.preventDefault();
 		if (loading) return;
 		error = "";
+		errorSandiLama = "";
 		errorSandiBaru = "";
 		errorUlangi = "";
 
-		const hasil = gantiSandiSchema.safeParse({ sandiBaru, ulangiSandi });
+		const hasil = gantiSandiSchema.safeParse({
+			sandiLama: wajibGanti ? undefined : sandiLama,
+			sandiBaru,
+			ulangiSandi,
+		});
 		if (!hasil.success) {
 			for (const isu of hasil.error.issues) {
-				if (isu.path[0] === "sandiBaru") errorSandiBaru = isu.message;
+				if (isu.path[0] === "sandiLama") errorSandiLama = isu.message;
+				else if (isu.path[0] === "sandiBaru") errorSandiBaru = isu.message;
 				else if (isu.path[0] === "ulangiSandi") errorUlangi = isu.message;
 			}
-			if (errorSandiBaru) elSandiBaru?.focus();
+			if (errorSandiLama) elSandiLama?.focus();
+			else if (errorSandiBaru) elSandiBaru?.focus();
 			else if (errorUlangi) elUlangi?.focus();
 			return;
 		}
@@ -50,7 +76,10 @@
 			await goto("/app");
 		} catch (err) {
 			if (err instanceof ApiError) {
-				if (err.field === "sandiBaru") {
+				if (err.field === "sandiLama") {
+					errorSandiLama = err.message;
+					elSandiLama?.focus();
+				} else if (err.field === "sandiBaru") {
 					errorSandiBaru = err.message;
 					elSandiBaru?.focus();
 				} else if (err.field === "ulangiSandi") {
@@ -73,9 +102,31 @@
 >
 	<img src="/logo-kemenkes.png" alt="Kemenkes" class="mb-8 h-12 w-auto object-contain object-left" />
 	<h1 class="text-xl font-semibold">Ganti kata sandi</h1>
-	<p class="mt-1 text-sm text-muted">Pakai sandi baru sebelum mengisi catatan.</p>
+	<p class="mt-1 text-sm text-muted">
+		{wajibGanti ? "Pakai sandi baru sebelum mengisi catatan." : "Masukkan sandi saat ini, lalu sandi baru."}
+	</p>
 
 	<form class="mt-8 space-y-4" method="post" action="/api/auth/ganti-sandi" onsubmit={simpan}>
+		{#if !wajibGanti}
+			<div>
+				<label class="block text-sm" for="sandi-lama">Sandi saat ini</label>
+				<input
+					id="sandi-lama"
+					name="sandiLama"
+					class="mt-1 min-h-11 w-full rounded-md border px-3 py-2"
+					class:border-error={errorSandiLama}
+					class:border-border={!errorSandiLama}
+					type="password"
+					autocomplete="current-password"
+					aria-invalid={errorSandiLama ? "true" : undefined}
+					aria-describedby={errorSandiLama ? "galat-sandi-lama" : undefined}
+					bind:value={sandiLama}
+					oninput={padaSandiLama}
+					bind:this={elSandiLama}
+				/>
+				{#if errorSandiLama}<p id="galat-sandi-lama" class="mt-1 text-sm text-error" role="alert">{errorSandiLama}</p>{/if}
+			</div>
+		{/if}
 		<div>
 			<label class="block text-sm" for="sandi-baru">Sandi baru</label>
 			<input

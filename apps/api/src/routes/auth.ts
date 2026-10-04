@@ -1,26 +1,19 @@
-import { akun, db, hashPassword, pegawai, sesi, verifyPassword } from "@logbook/db";
+import { akun, db, hashPassword, loginPercobaan, pegawai, sesi, verifyPassword } from "@logbook/db";
 import { gantiSandiSchema, loginSchema } from "@logbook/schemas";
-import { eq } from "drizzle-orm";
+import { and, count, eq, gte } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { deleteCookie, setCookie } from "hono/cookie";
 import { buatId } from "../lib/id";
+import {
+	ipDariHeader,
+	JENDELA_LOGIN_MS,
+	kunciIp,
+	kunciNipIp,
+	loginTerkunci,
+	PESAN_LOGIN_GAGAL,
+	PESAN_LOGIN_TERKUNCI,
+} from "../lib/login-batas";
 import { requireAuth } from "../middleware/auth";
-
-const attempts = new Map<string, number[]>();
-
-function tooMany(nip: string): boolean {
-	const now = Date.now();
-	const windowMs = 15 * 60_000;
-	const list = (attempts.get(nip) ?? []).filter((t) => now - t < windowMs);
-	attempts.set(nip, list);
-	return list.length >= 10;
-}
-
-function record(nip: string) {
-	const list = attempts.get(nip) ?? [];
-	list.push(Date.now());
-	attempts.set(nip, list);
-}
 
 function dariForm(c: Context): boolean {
 	return !(c.req.header("content-type") ?? "").includes("application/json");
@@ -44,6 +37,37 @@ async function bacaLogin(c: Context) {
 	return loginSchema.safeParse(await c.req.json());
 }
 
+function ipPermintaan(c: Context): string {
+	return ipDariHeader(c.req.header("cf-connecting-ip"), c.req.header("x-forwarded-for"));
+}
+
+async function jumlahPercobaan(kunci: string, sejak: string): Promise<number> {
+	const row = (
+		await db
+			.select({ jumlah: count() })
+			.from(loginPercobaan)
+			.where(and(eq(loginPercobaan.kunci, kunci), gte(loginPercobaan.terjadiPada, sejak)))
+	)[0];
+	return row?.jumlah ?? 0;
+}
+
+async function loginSudahTerkunci(nip: string, ip: string): Promise<boolean> {
+	const sejak = new Date(Date.now() - JENDELA_LOGIN_MS).toISOString();
+	const [nipIp, semuaIp] = await Promise.all([
+		jumlahPercobaan(kunciNipIp(nip, ip), sejak),
+		jumlahPercobaan(kunciIp(ip), sejak),
+	]);
+	return loginTerkunci(nipIp, semuaIp);
+}
+
+async function catatGagalLogin(nip: string, ip: string) {
+	const now = new Date().toISOString();
+	await db.insert(loginPercobaan).values([
+		{ id: buatId("lpn"), kunci: kunciNipIp(nip, ip), terjadiPada: now },
+		{ id: buatId("lpn"), kunci: kunciIp(ip), terjadiPada: now },
+	]);
+}
+
 export const authRoutes = new Hono()
 	.post("/login", async (c) => {
 		const parsed = await bacaLogin(c);
@@ -57,8 +81,9 @@ export const authRoutes = new Hono()
 			);
 		}
 		const { nip, sandi } = parsed.data;
-		if (tooMany(nip)) {
-			return gagalLogin(c, "Terlalu banyak percobaan. Coba lagi 15 menit.", undefined, 429);
+		const ip = ipPermintaan(c);
+		if (await loginSudahTerkunci(nip, ip)) {
+			return gagalLogin(c, PESAN_LOGIN_TERKUNCI, undefined, 429);
 		}
 
 		const found = await db
@@ -76,8 +101,8 @@ export const authRoutes = new Hono()
 			.limit(1);
 		const user = found[0];
 		if (!user) {
-			record(nip);
-			return gagalLogin(c, "NIP tidak terdaftar.", "nip", 401);
+			await catatGagalLogin(nip, ip);
+			return gagalLogin(c, PESAN_LOGIN_GAGAL, undefined, 401);
 		}
 		if (user.status !== "AKTIF") {
 			return gagalLogin(c, "Akses akun ditangguhkan. Hubungi administrator.", undefined, 401);
@@ -85,8 +110,8 @@ export const authRoutes = new Hono()
 
 		const ok = await verifyPassword(sandi, user.passwordHash);
 		if (!ok) {
-			record(nip);
-			return gagalLogin(c, "Kata sandi tidak sesuai.", "sandi", 401);
+			await catatGagalLogin(nip, ip);
+			return gagalLogin(c, PESAN_LOGIN_GAGAL, undefined, 401);
 		}
 
 		const sid = buatId("ses");
@@ -129,7 +154,23 @@ export const authRoutes = new Hono()
 			if (dariForm(c)) return c.redirect(`/ganti-sandi?galat=${encodeURIComponent(pesan)}`, 303);
 			return c.json({ error: pesan, field: first?.path[0] }, 400);
 		}
-		const { sandiBaru } = parsed.data;
+		const { sandiLama, sandiBaru } = parsed.data;
+		if (!user.wajibGantiSandi) {
+			if (!sandiLama) {
+				const pesan = "Kata sandi lama wajib diisi.";
+				if (dariForm(c)) return c.redirect(`/ganti-sandi?galat=${encodeURIComponent(pesan)}`, 303);
+				return c.json({ error: pesan, field: "sandiLama" }, 400);
+			}
+			const baris = (
+				await db.select({ passwordHash: akun.passwordHash }).from(akun).where(eq(akun.id, user.akunId)).limit(1)
+			)[0];
+			const cocok = baris ? await verifyPassword(sandiLama, baris.passwordHash) : false;
+			if (!cocok) {
+				const pesan = "Kata sandi lama tidak sesuai.";
+				if (dariForm(c)) return c.redirect(`/ganti-sandi?galat=${encodeURIComponent(pesan)}`, 303);
+				return c.json({ error: pesan, field: "sandiLama" }, 400);
+			}
+		}
 		if (sandiBaru === user.nip) {
 			const pesan = "Kata sandi baru tidak boleh sama dengan NIP.";
 			if (dariForm(c)) return c.redirect(`/ganti-sandi?galat=${encodeURIComponent(pesan)}`, 303);

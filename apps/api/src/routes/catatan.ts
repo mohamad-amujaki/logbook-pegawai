@@ -3,6 +3,7 @@ import {
 	catatanHarian,
 	db,
 	iki,
+	integrasiKehadiran,
 	pinKatalog,
 	produk,
 	rencanaAksi,
@@ -17,6 +18,8 @@ import {
 	catatanMassalSchema,
 	catatanSchema,
 	durasiKalenderMenit,
+	NAMA_PRODUK_KEHADIRAN,
+	NAMA_TAHAPAN_KEHADIRAN,
 	pinKatalogSchema,
 	validasiBackdate,
 	validasiWaktu,
@@ -83,6 +86,19 @@ async function tautanSkpSah(
 }
 
 type Pengguna = { id: string; namaLengkap: string };
+
+async function catatanDariKehadiran(catatanId: string): Promise<boolean> {
+	const tautan = (
+		await db
+			.select({ id: integrasiKehadiran.id })
+			.from(integrasiKehadiran)
+			.where(
+				and(eq(integrasiKehadiran.catatanHarianId, catatanId), eq(integrasiKehadiran.status, "aktif")),
+			)
+			.limit(1)
+	)[0];
+	return Boolean(tautan);
+}
 
 function nilaiIsian(body: {
 	jenisTugas: "TUSI" | "TUSI_LAINNYA" | "NON_TUSI";
@@ -180,7 +196,7 @@ async function kirimCatatan(row: typeof catatanHarian.$inferSelect) {
 			updatedAt: now,
 		})
 		.where(eq(catatanHarian.id, row.id));
-	if (row.isiManual) {
+	if (row.isiManual && !(await catatanDariKehadiran(row.id))) {
 		const ada = (
 			await db
 				.select({ id: usulanKatalog.id })
@@ -445,7 +461,10 @@ export const catatanRoutes = new Hono()
 				.limit(1)
 		)[0];
 		if (!row) return c.json({ error: "Catatan tidak ditemukan." }, 404);
-		return c.json(row);
+		return c.json({
+			...row,
+			sumberKehadiran: await catatanDariKehadiran(id),
+		});
 	})
 	.put(
 		"/:id",
@@ -481,15 +500,46 @@ export const catatanRoutes = new Hono()
 			if (row.status === "SUBMIT") {
 				return c.json({ error: "Catatan yang sudah dikirim tidak dapat diubah." }, 400);
 			}
-			if (body.waktuMulai.slice(0, 10) !== row.tanggal) {
-				const backdate = validasiBackdate(body.waktuMulai);
+			const dariKehadiran = await catatanDariKehadiran(id);
+			const katalogKehadiran =
+				dariKehadiran && body.jenisTugas !== "NON_TUSI"
+					? {
+							isiManual: true,
+							namaManualProduk: NAMA_PRODUK_KEHADIRAN,
+							namaManualTahapan: NAMA_TAHAPAN_KEHADIRAN,
+						}
+					: {};
+			const isian = dariKehadiran
+				? {
+						...body,
+						...katalogKehadiran,
+						waktuMulai: row.waktuMulai,
+						waktuSelesai: row.waktuSelesai,
+						menitEfektif: Math.min(
+							body.menitEfektif,
+							Math.max(durasiKalenderMenit(row.waktuMulai, row.waktuSelesai), 1),
+						),
+					}
+				: body;
+			if (!dariKehadiran && isian.waktuMulai.slice(0, 10) !== row.tanggal) {
+				const backdate = validasiBackdate(isian.waktuMulai);
 				if (backdate) return c.json({ error: backdate }, 400);
 			}
-			const cek = await galatIsian(user.id, body, id);
+			const cek = await galatIsian(user.id, isian, id);
 			if (typeof cek === "string") return c.json({ error: cek }, 400);
 			await db
 				.update(catatanHarian)
-				.set({ ...cek.nilai, updatedAt: new Date().toISOString() })
+				.set({
+					...cek.nilai,
+					...(dariKehadiran
+						? {
+								tanggal: row.tanggal,
+								waktuMulai: row.waktuMulai,
+								waktuSelesai: row.waktuSelesai,
+							}
+						: {}),
+					updatedAt: new Date().toISOString(),
+				})
 				.where(eq(catatanHarian.id, id));
 			return c.json({
 				id,
@@ -534,7 +584,7 @@ export const catatanRoutes = new Hono()
 				})
 				.where(and(eq(catatanHarian.pegawaiId, user.id), inArray(catatanHarian.id, unik)));
 			for (const row of rows) {
-				if (!row.isiManual) continue;
+				if (!row.isiManual || (await catatanDariKehadiran(row.id))) continue;
 				const ada = (
 					await db
 						.select({ id: usulanKatalog.id })
