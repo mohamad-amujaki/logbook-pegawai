@@ -20,15 +20,17 @@ describe("batas login", () => {
 
 describe("asal CORS", () => {
 	it("hanya mengizinkan localhost dan origin aplikasi", () => {
-		expect(asalCorsDiizinkan("http://localhost:5173", "https://logbook-pegawai.mujaki.workers.dev")).toBe(
-			"http://localhost:5173",
-		);
+		expect(
+			asalCorsDiizinkan("http://localhost:5173", "https://logbook-pegawai.mujaki.workers.dev"),
+		).toBe("http://localhost:5173");
 		expect(
 			asalCorsDiizinkan(
 				"https://logbook-pegawai.mujaki.workers.dev",
 				"https://logbook-pegawai.mujaki.workers.dev",
 			),
 		).toBe("https://logbook-pegawai.mujaki.workers.dev");
-		expect(asalCorsDiizinkan("https://evil.workers.dev", "https://logbook-pegawai.mujaki.workers.dev")).toBeUndefined();
+		expect(
+			asalCorsDiizinkan("https://evil.workers.dev", "https://logbook-pegawai.mujaki.workers.dev"),
+		).toBeUndefined();
 	});
 });

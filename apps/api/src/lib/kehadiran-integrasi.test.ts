@@ -101,7 +101,9 @@ describe("bangunIsianDraf", () => {
 		expect(isian.tanggal).toBe("2026-10-02");
 		expect(isian.satuanOutput).toBe("rapat");
 		expect(adalahCatatanKehadiran(isian)).toBe(true);
-		expect(adalahCatatanKehadiran({ isiManual: true, namaManualProduk: "Kehadiran rapat" })).toBe(true);
+		expect(adalahCatatanKehadiran({ isiManual: true, namaManualProduk: "Kehadiran rapat" })).toBe(
+			true,
+		);
 	});
 });
 

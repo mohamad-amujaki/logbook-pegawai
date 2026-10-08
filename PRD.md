@@ -3,11 +3,11 @@
 | Atribut | Isi |
 |---|---|
 | Nama produk | Logbook Kinerja Pegawai ASN Kemenkes |
-| Versi | 1.5 |
+| Versi | 1.6 |
 | Status | Prototype produksi — sinkron dengan implementasi dan rollout |
-| Tanggal | 4 Oktober 2026 (rev. 1.5 — ingest draf dari Kehadiran Rapat) |
+| Tanggal | 4 Oktober 2026 (rev. 1.6 — draf Kehadiran Rapat, kunci jadwal, pengerasan integritas) |
 | Pemilik produk | Product owner, pegawai Biro OSDM |
-| Realisasi | §27 Status implementasi produksi rev. 1.4 (kondisi kode saat ini) |
+| Realisasi | §27 Status implementasi produksi rev. 1.6 (kondisi kode saat ini) |
 | Sumber konsep awal | [Percakapan DeepSeek](https://chat.deepseek.com/share/v2zpxd9idx6a3kgvsz) |
 | Referensi resmi | KMK HK.01.07/MENKES/65/2026; Standar Interoperabilitas Logbook Kemenkes v1 2026.09.26 |
 | Tech | [TECH.md](./TECH.md) — Svelte 5, Bun, Hono, Zod, Drizzle, SQLite/D1, Cloudflare |
@@ -559,6 +559,7 @@ Prinsip data:
 | API Hub (Srikandi, SIMKA, SILK, dll.) | Tidak | Ya | Entri otomatis |
 | SSO Kemenkes | Tidak | Ya | Autentikasi institusi |
 | Absensi / e-presensi | Tidak | Ya | Bukan sumber jam efektif |
+| Kehadiran Rapat (`kehadiran-rapat.web.id`) | Ya (M2M HMAC) | — | Check-in hadir ASN OSDM → draf catatan; bukan absensi resmi |
 
 ---
 
@@ -1039,7 +1040,7 @@ Status: **T** = terpasang, **S** = sebagian, **B** = belum.
 4. **Bukti satu tautan** per catatan (bukan 0–5 tautan + jenis + penandaan atasan).
 5. **Validasi tanpa delegasi/SLA**; hanya setujui/tolak + setujui massal. Tidak ada "revisi" terpisah dari "tolak".
 6. **Klasemen menambah konsep "jam tercatat"** (termasuk catatan menunggu validasi) di samping "jam resmi".
-7. **Login memakai rate limit in-memory** 10 percobaan/15 menit per NIP; belum ada token CSRF.
+7. **Login memakai rate limit D1** (rev. 1.6): 10 percobaan / 15 menit per NIP+IP dan 40 per IP; pesan gagal diseragamkan. Belum ada token CSRF.
 8. **Hapus master bersifat keras** dengan penjagaan ketergantungan; hapus pegawai menghapus data turunannya.
 9. **Unit kerja dua tingkat** (Eselon I + unit), bukan master jabatan/pangkat terpisah.
 
@@ -1244,9 +1245,9 @@ Tambahan rev. 1.3:
 
 ---
 
-## 27. Status implementasi produksi rev. 1.4
+## 27. Status implementasi produksi (rev. 1.4–1.6)
 
-> Sumber kebenaran realisasi per 29 September 2026. Menggantikan §26 bila bertentangan. Fokus perubahan: alur Non Tusi, jendela backdate 4 hari, dan auto-verifikasi validasi.
+> Sumber kebenaran realisasi. Menggantikan §26 bila bertentangan. Rev. 1.4: Non Tusi, backdate 4 hari, auto-verifikasi. Rev. 1.5–1.6: ingest Kehadiran Rapat, kunci jadwal draf, pengerasan identitas/login/CORS.
 
 ### 27.1 Non Tusi tanpa Target Kinerja dan katalog
 
@@ -1298,14 +1299,40 @@ Tambahan rev. 1.3:
 - Endpoint `GET /api/pengguna/:id/audit` mengembalikan riwayat audit akun (urut terbaru, maksimum 100 baris); belum ada layar UI yang menampilkannya.
 - Koreksi status lain terhadap §25.7: **FR-LG-05** turun menjadi **S** — `usulan_norma_waktu` diterima API dan tersimpan di `usulan_katalog.norma_waktu`, tetapi form catatan belum menyediakan inputnya.
 
-### 27.7 Ingest draf Kehadiran Rapat (rev. 1.5)
+### 27.7 Ingest draf Kehadiran Rapat (rev. 1.5–1.6)
 
-Kehadiran Rapat mendorong event mesin-ke-mesin (HMAC), bukan sesi pegawai.
+Kehadiran Rapat mendorong event mesin-ke-mesin (HMAC), bukan sesi pegawai. Kegagalan ingest **tidak** membatalkan check-in di portal kehadiran.
 
-- `POST /api/integrasi/kehadiran/checkin` dan `.../undo`.
-- Header `X-Kehadiran-Timestamp` + `X-Kehadiran-Signature` = hex HMAC-SHA256(`timestamp.body`) dengan secret `KEHADIRAN_HMAC_SECRET`.
-- Identitas: NIP 18 digit di master `pegawai`; cadangan `pemetaan_email_kehadiran`.
-- Check-in membuat catatan `DRAFT` jenis Tusi Lainnya (isi manual, tanpa IKI). Jam efektif tetap 0 sampai pegawai lengkapi IKI dan catatan diverifikasi.
-- Idempotensi: `integrasi_kehadiran.kunci_idempotensi`.
-- Undo: hapus jika masih `DRAFT`; jika `SUBMIT`/`TERVERIFIKASI` hanya ditandai kehadiran dibatalkan.
+- `POST /api/integrasi/kehadiran/checkin` dan `POST /api/integrasi/kehadiran/undo`.
+- Header `X-Kehadiran-Timestamp` (unix detik) + `X-Kehadiran-Signature` = hex HMAC-SHA256(`KEHADIRAN_HMAC_SECRET`, `${timestamp}.${body}`). Jendela stempel ±300 detik; banding tanda tangan konstan waktu.
+- Identitas: NIP 18 digit di master `pegawai` (wajib aktif). Cadangan: `pemetaan_email_kehadiran`. Jika NIP dan email merujuk pegawai berbeda → `409 IDENTITAS_BENTROK`.
+- Check-in membuat catatan `DRAFT` jenis **Tusi Lainnya**, isi manual, tanpa IKI. Nama produk/tahapan tetap `Kehadiran Rapat` / `Otomatis` (`NAMA_PRODUK_KEHADIRAN`, `NAMA_TAHAPAN_KEHADIRAN`).
+- Menit efektif = durasi jadwal rapat (dipotong ke selisih mulai–selesai). Jam efektif klasemen tetap 0 sampai pegawai lengkapi IKI (kecuali Non Tusi) dan catatan diverifikasi.
+- Idempotensi: `integrasi_kehadiran.kunci_idempotensi` (= `kodeRapat` + NIP/email + `pesertaId`). Replay untuk pegawai lain ditolak `409`.
+- Label UI “dari kehadiran” hanya jika tautan `integrasi_kehadiran.status = aktif`.
+- Undo:
+  - `DRAFT` → hapus catatan, status tautan `dicabut`.
+  - `SUBMIT` / `DITOLAK` → catatan tetap; catatan validasi menandai kehadiran dibatalkan; tautan `dicabut`.
+  - `TERVERIFIKASI` → catatan **tidak** diubah; hanya cabut tautan + notifikasi in-app.
+  - Undo wajib cocok `pegawaiId` pada tautan.
+- Audit sistem: `kehadiran.checkin` / `kehadiran.undo` (`catatAuditSistem`). Notifikasi draf ke pegawai; kegagalan audit/notifikasi tidak membatalkan ingest.
 - Migrasi `packages/db/migrations/0003_integrasi_kehadiran.sql`.
+
+### 27.8 Penyelesaian draf kehadiran dan pengerasan (rev. 1.6)
+
+**Form dan API catatan** (`GET`/`PUT /api/catatan/:id`, daftar, kalender, validasi):
+
+- Tanggal serta jam mulai–selesai terkunci ke nilai portal; pegawai tidak boleh menggesernya.
+- Menit efektif boleh diubah, maksimum = durasi jadwal (selesai − mulai).
+- Jenis tugas boleh diubah (Tusi / Tusi Lainnya / Non Tusi). Tusi/Tusi Lainnya tetap mewajibkan IKI + rencana aksi sebelum ajukan; Non Tusi mengikuti aturan §27.1.
+- Nama produk/tahapan paksa `Kehadiran Rapat` / `Otomatis` kecuali Non Tusi. Usulan katalog OSDM dilewati untuk catatan bersumber kehadiran aktif.
+
+**Login dan sesi**
+
+- Pesan gagal seragam: “NIP atau kata sandi tidak sesuai.” (tanpa enumerasi NIP vs sandi).
+- Rate limit di D1 `login_percobaan` (migrasi `0004_login_percobaan.sql`): 10 percobaan / 15 menit per NIP+IP; 40 per IP / 15 menit → `429`.
+- Ganti sandi (`POST /api/auth/ganti-sandi`) mewajibkan sandi lama kecuali `wajibGantiSandi`.
+
+**CORS.** Origin yang diizinkan hanya `APP_ORIGIN` dan `http://localhost:5173` / `http://127.0.0.1:5173` (`apps/api/src/lib/cors.ts`).
+
+**Operasional.** Secret produksi `KEHADIRAN_HMAC_SECRET` harus sama dengan `LOGBOOK_HMAC_SECRET` di Workers Kehadiran. URL ingest: `https://logbook-api.mujaki.workers.dev/api/integrasi/kehadiran/*`.

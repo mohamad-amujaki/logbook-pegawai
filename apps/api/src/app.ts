@@ -20,7 +20,6 @@ export type ApiBindings = {
 	KEHADIRAN_HMAC_SECRET?: string;
 };
 
-
 export const app = new Hono<{ Bindings: ApiBindings }>().basePath("/api");
 
 app.use("*", async (c, next) => {

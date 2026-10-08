@@ -177,7 +177,10 @@ export async function prosesCheckinKehadiran(input: KehadiranIngestInput, asalAp
 	const identitas = await cariPegawai(input);
 	if (!identitas.ok) {
 		const gagal = gagalIdentitas(identitas);
-		await auditKehadiran("kehadiran.checkin", input, { status: gagal.body.status, http: gagal.http });
+		await auditKehadiran("kehadiran.checkin", input, {
+			status: gagal.body.status,
+			http: gagal.http,
+		});
 		return gagal;
 	}
 

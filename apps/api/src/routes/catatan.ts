@@ -93,7 +93,10 @@ async function catatanDariKehadiran(catatanId: string): Promise<boolean> {
 			.select({ id: integrasiKehadiran.id })
 			.from(integrasiKehadiran)
 			.where(
-				and(eq(integrasiKehadiran.catatanHarianId, catatanId), eq(integrasiKehadiran.status, "aktif")),
+				and(
+					eq(integrasiKehadiran.catatanHarianId, catatanId),
+					eq(integrasiKehadiran.status, "aktif"),
+				),
 			)
 			.limit(1)
 	)[0];

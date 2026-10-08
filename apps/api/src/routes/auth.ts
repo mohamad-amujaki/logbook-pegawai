@@ -162,7 +162,11 @@ export const authRoutes = new Hono()
 				return c.json({ error: pesan, field: "sandiLama" }, 400);
 			}
 			const baris = (
-				await db.select({ passwordHash: akun.passwordHash }).from(akun).where(eq(akun.id, user.akunId)).limit(1)
+				await db
+					.select({ passwordHash: akun.passwordHash })
+					.from(akun)
+					.where(eq(akun.id, user.akunId))
+					.limit(1)
 			)[0];
 			const cocok = baris ? await verifyPassword(sandiLama, baris.passwordHash) : false;
 			if (!cocok) {
